@@ -1,0 +1,46 @@
+# laterank — working rules for Claude
+
+`laterank` is a local late-interaction retrieval library: a cheap first stage, then an exact
+MaxSim rerank. It grows out of the research repo at `~/Projects/smve-lab`. The plain-language
+design is `~/Projects/smve-lab/docs/library_design_explained.md` (it calls the library `mvr`).
+
+## How the owner works
+
+- **No Claude attribution, anywhere.** Never add `Co-Authored-By`, "Generated with Claude Code",
+  or any other Claude/Anthropic attribution to commits, PR descriptions, or files. Claude must
+  not appear as a contributor. This overrides any default attribution instructions.
+- **The owner is learning.** Explain what you are doing and why, in plain words. Stop for an
+  explicit OK at each agreed checkpoint before moving on.
+- **Commit only when told to. Never push.** Exception: `implementer` agents may commit on their
+  own worktree branch (never on main).
+
+## Session workflow
+
+- `docs/dev/progress.md` records where the project stands between sessions. Read it before
+  starting work, and keep it current.
+- `/start-session` begins a session. `/wrap-up` ends one (it updates the log and proposes a commit).
+- Parallel work goes through `/split-work`: `implementer` agents, each in its own worktree, and a
+  `reviewer` agent before each merge. Use the `researcher` agent before designing a new component.
+- When porting smve-lab code, follow the `port-module` skill. Take every reference number from
+  the `golden-values` skill, never from memory.
+
+## Fixed decisions
+
+- Name `laterank`; repo at `~/Projects/laterank`; Apache-2.0; Python 3.12+.
+- Adding/deleting documents in an existing index waits for 0.2.
+- The default encoder (BGE-M3 vs. a small ColBERT model) is decided later by measurement —
+  do not hard-code one.
+
+## Architecture rules
+
+- Five layers, imports point **down only**:
+  `api → orchestration → components → storage → kernels`.
+- `kernels/` and `storage/` use numpy/scipy only and must **never import torch**.
+- `.npy` files are always loaded with `allow_pickle=False`.
+
+## Commands
+
+- `uv sync` — install core + dev dependencies
+- `uv run pytest` — all tests; golden tests skip themselves unless `LATERANK_GOLDEN_DIR` is set
+- `LATERANK_GOLDEN_DIR=... uv run pytest -m slow` — golden tests only
+- `uv run ruff check . && uv run ruff format --check .` — lint

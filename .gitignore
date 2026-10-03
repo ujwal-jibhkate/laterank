@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environments
+.venv/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local data and indexes (never commit embeddings)
+*.npy
+*.npz
+!tests/fixtures/**/*.npy
+
+# Claude Code personal settings (team settings in .claude/ are committed)
+.claude/settings.local.json

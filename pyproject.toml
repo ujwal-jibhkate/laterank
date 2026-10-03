@@ -1,0 +1,67 @@
+[project]
+name = "laterank"
+dynamic = ["version"]
+description = "Local late-interaction retrieval: a cheap first stage, then an exact MaxSim rerank."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Ujwal Jibhkate", email = "ujwaljibhkate06@gmail.com" }]
+requires-python = ">=3.12"
+keywords = ["retrieval", "colbert", "late-interaction", "maxsim", "search", "bge-m3"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Text Processing :: Indexing",
+]
+# Core stays numpy/scipy only: kernels/ and storage/ must never need torch.
+dependencies = [
+    "numpy>=2.2",
+    "scipy>=1.15",
+    "PyStemmer",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+# Names are fixed now; contents arrive with the components that need them (M1+).
+bge-m3 = []
+colbert = []
+rerank = []
+pandas = []
+all = ["laterank[bge-m3,colbert,rerank,pandas]"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "hypothesis",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+# Used before the first git tag exists (and in source trees without .git).
+fallback-version = "0.0.0"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/laterank"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--import-mode=importlib"]
+markers = [
+    "slow: golden tests on real embeddings; need LATERANK_GOLDEN_DIR (skipped when unset)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "NPY", "RUF"]
