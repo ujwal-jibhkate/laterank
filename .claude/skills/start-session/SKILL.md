@@ -10,7 +10,10 @@ disable-model-invocation: true
 A new session remembers nothing about earlier sessions. `docs/dev/progress.md` is the project's
 memory, so read it before anything else.
 
-1. Read `CLAUDE.md` and `docs/dev/progress.md`.
+1. Read `CLAUDE.md` and `docs/dev/progress.md`. Run `python3 scripts/specs.py active` and read
+   that spec in full: its unticked acceptance tests and its **Tasks** table are today's work. If
+   no spec is approved, today's first task is drafting the next one with `/spec <id>`, because
+   no code can change until it's approved.
 2. Look at the repo:
    - `git status --short`
    - `git log --oneline -10` (a brand-new repo has no commits yet; that's fine)
@@ -20,7 +23,8 @@ memory, so read it before anything else.
    - `uv run pytest -q`
    - `uv run ruff check .`
 4. Report to the owner in 15 lines or fewer:
-   - where we are: milestone, checkpoint, and the last log entry's date
+   - where we are: milestone, the active spec (id and status), how many of its acceptance tests
+     are ticked, and the last log entry's date
    - anything that changed since that entry: commits it doesn't mention, uncommitted files,
      leftover worktrees
    - test and lint status: pass or fail counts, plus the first failure's name if any

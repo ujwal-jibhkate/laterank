@@ -1,0 +1,5 @@
+#!/bin/sh
+# Rejects Claude attribution, and requires a "Spec: <id>" trailer on commits that touch
+# src/ or tests/. The rules live in scripts/specs.py. Enable once per clone with:
+#   git config core.hooksPath scripts/git-hooks
+exec python3 "$(git rev-parse --show-toplevel)/scripts/specs.py" commit-msg "$1"

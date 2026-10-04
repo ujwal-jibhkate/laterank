@@ -14,7 +14,23 @@ design is `~/Projects/smve-lab/docs/library_design_explained.md` (it calls the l
 - **Commit only when told to. Never push.** Exception: `implementer` agents may commit on their
   own worktree branch (never on main).
 
+## Spec-driven development (enforced)
+
+- Every checkpoint has a spec in `docs/specs/<id>-<slug>.md` (rules: `docs/specs/README.md`).
+  Status goes `draft` → `approved` → `done`, and only one spec is `approved` at a time.
+- `src/` and `tests/` change **only while a spec is approved**. A hook blocks edits otherwise.
+  Build exactly what the spec's **Interfaces** say. If the plan has to change, update the spec
+  first (`/spec <id> change "..."`) and tell the owner.
+- Only the owner approves a spec or marks it done. Never set those statuses unless the owner
+  asked; the hook makes them confirm anyway.
+- Every commit touching `src/` or `tests/` ends with a `Spec: <id>` trailer (checked by the git
+  hook). Use `Spec: none - <reason>` only for tiny fixes outside any checkpoint.
+- `python3 scripts/specs.py active` prints the spec in progress.
+
 ## Session workflow
+
+- `START_HERE.md` is the owner's guide to working on this repo. Whenever a skill, agent, hook,
+  or command changes, update it in the same commit.
 
 - `docs/dev/progress.md` records where the project stands between sessions. Read it before
   starting work, and keep it current.

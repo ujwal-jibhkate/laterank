@@ -13,6 +13,11 @@ Find the change: `git diff main...<branch>` for a branch, or `git diff` plus `gi
 uncommitted work. Read every changed file in full, not just the hunks.
 
 Check, in this order:
+0. **The spec.** Read the spec the commits name (`Spec: <id>` trailer, or
+   `python3 scripts/specs.py active`). Does the code match its **Interfaces** exactly? Does each
+   acceptance test the change claims to cover really have a passing test? Is there code the spec
+   doesn't ask for? Is a decision made in the code missing from the spec's **Decisions** or
+   **Changes**?
 1. **Correctness.** Does the code compute what its docstring says? Compare it against the smve-lab
    original in `~/Projects/smve-lab/src/smve_lab/` when it was ported. Look at off-by-one errors in
    offsets and reduceat boundaries, empty docs, k ≥ width, float16 to float32 handling, and silent
@@ -34,4 +39,5 @@ Output:
 - **Findings**: at most 10, most severe first. Each one gets `path:line`, a one-sentence defect,
   and a concrete failure scenario (input → wrong result). Skip style nitpicks that ruff doesn't
   flag.
+- **Spec status**: each acceptance test as `pass`, `fail`, or `not covered`.
 - **Tests run**: commands and their pass/fail counts.

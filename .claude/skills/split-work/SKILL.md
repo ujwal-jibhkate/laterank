@@ -12,13 +12,16 @@ disable-model-invocation: true
 - The repo has at least one commit, and `git status --short` is clean. Agent worktrees are created
   from the last commit, so uncommitted work is invisible to them. If the tree is dirty, suggest
   `/wrap-up` first.
-- Every task's inputs already exist on main. If two tasks need a shared interface (a function
-  signature, a file format, a dataclass), write and commit that interface in this session first,
-  then split.
+- A spec is approved (`python3 scripts/specs.py active`) and committed. The tasks come from its
+  **Tasks** table, and the agents build against its **Interfaces**.
+- Every task's inputs already exist on main. If two tasks share an interface, it must already
+  be in the spec's **Interfaces** section, written down exactly. Otherwise, update the spec
+  first.
 
 ## 2. Plan, and get approval
 
-From `docs/dev/progress.md`, the owner's request ($ARGUMENTS) and the code, build a table:
+From the spec's **Tasks** table (rows marked parallel), the owner's request ($ARGUMENTS) and the
+code, build a table:
 
 | task | files it owns (creates or edits) | must not touch | done means | test command |
 |---|---|---|---|---|
@@ -34,6 +37,7 @@ Show the table and wait for the owner's OK.
 
 Start one `implementer` agent per task, all in the **same message** so they run in parallel. Each
 prompt must stand alone, because the agent hasn't seen this conversation. Include:
+- the spec's path and id, and which of its acceptance tests this task must make pass
 - the goal, the files it owns, the files it must not touch, and what "done" means
 - the exact test command
 - which project skills apply (`port-module`, `golden-values`)

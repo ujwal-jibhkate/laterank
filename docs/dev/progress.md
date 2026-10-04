@@ -8,7 +8,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - Milestone **M0: foundations** (planned Oct 5–9, 2026).
 - Checkpoint 1 (skeleton) is committed: pyproject, src layout, `kernels/` and `storage/`
   packages, CI workflow, `tests/test_layers.py`.
-- Checkpoint 2 (kernels) is in progress. Checkpoints 3 (storage) and 4 (golden harness) are not
+- Checkpoint 2 (kernels) is built, 60 tests passing, not yet committed. Checkpoints 3 (storage) and 4 (golden harness) are not
   started.
 
 ## M0 checklist
@@ -22,6 +22,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 | smve-lab file | laterank file | what changed |
 |---|---|---|
+| `maxsim.py` (`maxsim_scores`, `subset_ragged`) | `kernels/maxsim.py` | asserts → `ValueError`; progress bar off by default; empty query/doc sets allowed |
+| `maxsim.py` + `inverted_index.py` (`top_k`) | `kernels/topk.py` | returns indices, not id dicts; ties broken by lower row (argpartition alone was arbitrary at the k-th place); 1-D and 2-D |
+| `inverted_index.py` | `kernels/inverted.py` | class → pure functions over `(indptr, rows, weights)`; scores returned as float32 |
+| `smve.py` | `kernels/smve.py` | torch → numpy (`argpartition`, `bincount`, `np.unique`); anchors from `kernels/rng.py`; `token_mean` samples with the portable RNG and accumulates in float64 |
+| `smve.make_anchors` (torch.Generator) | `kernels/rng.py` | new: SplitMix64 + Box–Muller with polynomial log/sin/cos, bit-identical on every platform; `anchor_sha256` |
+| `metrics.py` (nDCG, Recall) | `kernels/metrics.py` | pandas dropped; `mean_metric` replaces `evaluate_run`; P/MRR/MAP wait for M2 |
 
 ## Log
 
@@ -31,5 +37,18 @@ This file is the project's memory between Claude Code sessions. `/start-session`
   `researcher`), and a `commit-msg` git hook that rejects Claude attribution.
 - **Decisions**: name `laterank`; Apache-2.0; Python 3.12+; add/delete deferred to 0.2; default
   model decided by M1 measurements.
-- **Next**: the owner OKs checkpoint 1 and makes the first commit, then start checkpoint 2 with the
-  portable anchor generator and its frozen test vector.
+- **Decisions (checkpoint 2)**: the RNG computes log/sin/cos with its own polynomials (only
+  + − × ÷ √, which IEEE-754 makes bit-identical everywhere) instead of `np.log`/`np.cos`, whose
+  last bit varies by platform. Anchors are generated column by column, so a wider matrix starts
+  with the narrower one. `anchor_sha256` hashes the whole float32 matrix (the design doc said
+  "first anchor block"). Metrics live in `kernels/metrics.py` until an `eval/` layer exists.
+  Building the largest anchor matrix (1024 × 131,072) takes ~4.5 s, so M1 should avoid
+  regenerating it on every `open`.
+- **Workflow**: switched to spec-driven development (`docs/specs/README.md`). Added a `/spec`
+  command, `scripts/specs.py` (with tests in `tests/test_specs.py`), a Claude Code hook that
+  blocks `src/` and `tests/` edits without an approved spec, a versioned git hook
+  (`core.hooksPath = scripts/git-hooks`) requiring a `Spec: <id>` trailer, and a CI spec check.
+  Wrote M0-1 (done) and M0-2 (approved) after the fact from the scaffold prompt.
+- **Next**: the owner reviews `docs/specs/M0-2-kernels.md` (note that `anchor_sha256` differs
+  from the design doc), the reviewer agent checks the kernels, then commit with `Spec: M0-2`,
+  run `/spec M0-2 done`, and draft `/spec M0-3` (storage).

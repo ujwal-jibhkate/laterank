@@ -17,6 +17,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv run --only-group dev ruff check .
       - run: uv run --only-group dev ruff format --check .
+      # Every spec in docs/specs/ has the required sections and a valid status.
+      - run: python3 scripts/specs.py check
 
   test:
     name: test (${{ matrix.os }}, py${{ matrix.python }})

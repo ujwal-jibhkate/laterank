@@ -12,6 +12,10 @@ strings like `hybrid > maxsim@100`, you can measure any of them on your own data
 are the settings that won in our measurements on BEIR. It grows out of the research in
 [smve-lab](https://github.com/ujwal-jibhkate/smve-lab); SMVE is TopK's method and is credited as such.
 
+## Working on laterank
+
+Start with [START_HERE.md](START_HERE.md): the daily workflow, the spec rules, and every command.
+
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
