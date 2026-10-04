@@ -8,13 +8,14 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - Milestone **M0: foundations** (planned Oct 5–9, 2026).
 - Checkpoint 1 (skeleton) is committed: pyproject, src layout, `kernels/` and `storage/`
   packages, CI workflow, `tests/test_layers.py`.
-- Checkpoint 2 (kernels) is built, 60 tests passing, not yet committed. Checkpoints 3 (storage) and 4 (golden harness) are not
-  started.
+- Checkpoint 2 (kernels) is committed and reviewed (verdict `merge`); all six M0-2 acceptance
+  tests are ticked, waiting for the owner's `/spec M0-2 done`. 85 tests pass.
+- Checkpoint 3 (storage): spec M0-3 to be drafted. Checkpoint 4 (golden harness) not started.
 
 ## M0 checklist
 
 - [x] 1. Skeleton: uv + hatchling/hatch-vcs, Apache-2.0, extras declared, CI (3 OS × py3.12/3.13)
-- [ ] 2. Kernels: MaxSim, top-k, CSC scoring, SMVE encode, portable SplitMix64 anchors + SHA-256, metrics
+- [x] 2. Kernels: MaxSim, top-k, CSC scoring, SMVE encode, portable SplitMix64 anchors + SHA-256, metrics
 - [ ] 3. Storage: manifest.json (atomic write), segments, `.npy` with mmap and no pickle, docs.jsonl + offsets
 - [ ] 4. Golden harness: `LATERANK_GOLDEN_DIR`, SciFact qrels fixture, exhaustive 0.6991 and dense 0.6542
 
@@ -30,6 +31,17 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `metrics.py` (nDCG, Recall) | `kernels/metrics.py` | pandas dropped; `mean_metric` replaces `evaluate_run`; P/MRR/MAP wait for M2 |
 
 ## Log
+
+### 2026-10-03 (session 2)
+- **Done**: committed the spec-workflow tooling on its own. Reviewer agent on the kernels: "fix
+  first". Fixed SMVE crashing on empty documents (int64 `bincount`), `top_k` with unsigned/bool/
+  large-int scores (it no longer negates or converts), MaxSim offsets not checked against the token
+  array, and the docstring that tripped AT4's grep. Gave each RNG purpose its own stream
+  (`sample_indices` now derives its seed). Added a frozen hash of 10**6 float64 normals and an
+  odd-d anchor test. Re-review: "merge". Ticked AT1–AT6.
+- **Open**: AT3's cross-platform claim is proven only on macOS until CI runs on ubuntu/windows
+  (needs the first push).
+- **Next**: owner runs `/spec M0-2 done`; draft `/spec M0-3` (storage) for the owner to approve.
 
 ### 2026-10-03
 - **Done**: scaffolded the repo (checkpoint 1). Added project skills (`/start-session`, `/wrap-up`,
