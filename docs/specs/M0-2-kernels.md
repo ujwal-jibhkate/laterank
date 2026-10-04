@@ -1,7 +1,7 @@
 ---
 id: M0-2
 title: Kernels
-status: approved
+status: done
 approved: 2026-10-03
 ---
 

@@ -8,9 +8,10 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - Milestone **M0: foundations** (planned Oct 5–9, 2026).
 - Checkpoint 1 (skeleton) is committed: pyproject, src layout, `kernels/` and `storage/`
   packages, CI workflow, `tests/test_layers.py`.
-- Checkpoint 2 (kernels) is committed and reviewed (verdict `merge`); all six M0-2 acceptance
-  tests are ticked, waiting for the owner's `/spec M0-2 done`. 85 tests pass.
-- Checkpoint 3 (storage): spec M0-3 to be drafted. Checkpoint 4 (golden harness) not started.
+- Checkpoint 2 (kernels) is done: committed (`9659cf9`), reviewed (`merge`), spec M0-2 marked
+  done by the owner. 85 tests pass.
+- Checkpoint 3 (storage): spec M0-3 approved 2026-10-03; building starts with task 1. Checkpoint 4
+  (golden harness) not started.
 
 ## M0 checklist
 
