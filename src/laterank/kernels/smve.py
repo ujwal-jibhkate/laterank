@@ -28,9 +28,8 @@ Centering (`center`): BGE-M3 token vectors all lean towards a shared direction, 
 it land in almost every token's top-k and carry no information. Subtracting the corpus mean token
 (see `token_mean`) and re-normalizing removes that shared part.
 
-Two implementations:
-  - `smve_single`: one text at a time; the readable reference the tests check against.
-  - `smve_encode`: a whole ragged array in token chunks, returning a scipy CSR matrix.
+`smve_encode` encodes a whole ragged array in token chunks and returns a scipy CSR matrix. The
+tests check it against a plain dense version (tests/kernels/test_smve.py).
 
 Ported from smve-lab's smve.py with torch replaced by numpy. Anchors come from laterank's
 portable generator, so numbers match smve-lab statistically, not bit for bit.
@@ -42,6 +41,7 @@ import numpy as np
 import scipy.sparse as sp
 from tqdm import tqdm
 
+from laterank.kernels.maxsim import _batches
 from laterank.kernels.rng import sample_indices
 
 
@@ -74,29 +74,6 @@ def topk_blocks(P: np.ndarray, k: int, reps: int = 1) -> tuple[np.ndarray, np.nd
     values = np.take_along_axis(blocks, idx, axis=-1)
     idx = idx + (np.arange(reps) * w)[None, :, None]  # local -> global column
     return values.reshape(T, reps * k), idx.reshape(T, reps * k)
-
-
-def smve_single(
-    tokens: np.ndarray,
-    B: np.ndarray,
-    k: int,
-    is_query: bool,
-    reps: int = 1,
-    center: np.ndarray | None = None,
-) -> np.ndarray:
-    """Encode one text's token vectors (n_tokens, d) into a dense (w,) float32 SMVE vector.
-
-    A text with no tokens encodes to all zeros (as in smve-lab).
-    """
-    B = np.asarray(B, dtype=np.float32)
-    X = _center(np.asarray(tokens, dtype=np.float32), center)
-    values, indices = topk_blocks(X @ B, k, reps)
-    w = B.shape[1]
-    # astype: bincount returns int64 for empty input even with weights (an empty text).
-    pooled = np.bincount(indices.ravel(), weights=values.ravel(), minlength=w).astype(np.float64)
-    if not is_query:
-        pooled /= np.maximum(np.bincount(indices.ravel(), minlength=w), 1)
-    return pooled.astype(np.float32)
 
 
 def smve_encode(
@@ -136,10 +113,7 @@ def smve_encode(
     rows, cols, vals = [], [], []
     desc = "SMVE " + ("queries" if is_query else "docs")
     pbar = tqdm(total=n_items, desc=desc, unit="item", disable=not show_progress)
-    start = 0
-    while start < n_items:
-        end = int(np.searchsorted(offsets, offsets[start] + tokens_per_chunk, side="right")) - 1
-        end = min(max(end, start + 1), n_items)
+    for start, end in _batches(offsets, tokens_per_chunk):
         X = _center(np.asarray(flat[offsets[start] : offsets[end]], dtype=np.float32), center)
         values, indices = topk_blocks(X @ B, k, reps)  # (T, reps*k)
 
@@ -159,7 +133,6 @@ def smve_encode(
         cols.append(uniq % w)
         vals.append(pooled.astype(np.float32))
         pbar.update(end - start)
-        start = end
     pbar.close()
 
     if not vals:  # no items at all

@@ -1,4 +1,4 @@
-"""SMVE: the batched encoder vs. the single-text reference vs. a dense scatter version."""
+"""SMVE: the batched encoder vs. a dense scatter reference."""
 
 import numpy as np
 import pytest
@@ -8,22 +8,25 @@ from hypothesis import strategies as st
 
 from laterank.kernels.inverted import score_postings, to_postings
 from laterank.kernels.rng import make_anchors
-from laterank.kernels.smve import smve_encode, smve_single, token_mean, topk_blocks
+from laterank.kernels.smve import smve_encode, token_mean, topk_blocks
 
 
-def _dense_reference(x, B, k, is_query, center=None):
-    """smve-lab's notebook version in plain numpy: scatter each token's top-k into a dense
-    (n_tokens, w) matrix, then sum (query) or average over the tokens that hit each anchor."""
+def _dense_reference(x, B, k, is_query, center=None, reps=1):
+    """smve-lab's notebook version in plain numpy: scatter each token's top-k (per block of
+    w/reps anchors) into a dense (n_tokens, w) matrix, then sum (query) or average over the
+    tokens that hit each anchor."""
     x = x.astype(np.float64)
     if center is not None:
         x = x - center
         x = x / np.linalg.norm(x, axis=1, keepdims=True)
     P = x @ B.astype(np.float64)
     sparse, mask = np.zeros_like(P), np.zeros_like(P)
+    w = P.shape[1] // reps
     for t in range(len(P)):
-        top = np.argsort(-P[t])[:k]
-        sparse[t, top] = P[t, top]
-        mask[t, top] = 1
+        for r in range(reps):
+            top = r * w + np.argsort(-P[t, r * w : (r + 1) * w])[:k]
+            sparse[t, top] = P[t, top]
+            mask[t, top] = 1
     pooled = sparse.sum(axis=0)
     return pooled if is_query else pooled / np.maximum(mask.sum(axis=0), 1)
 
@@ -34,22 +37,7 @@ def _ragged(rng, lengths, dim):
     return flat, offsets
 
 
-def test_single_matches_dense_reference():
-    rng = np.random.default_rng(0)
-    B = make_anchors(16, 64, seed=0)
-    x = rng.standard_normal((9, 16)).astype(np.float16)
-    mu = rng.standard_normal(16).astype(np.float32) * 0.1
-    for is_query in (True, False):
-        for center in (None, mu):
-            np.testing.assert_allclose(
-                smve_single(x, B, 5, is_query, center=center),
-                _dense_reference(x, B, 5, is_query, center),
-                rtol=1e-5,
-                atol=1e-6,
-            )
-
-
-def test_batched_matches_single_across_chunks():
+def test_batched_matches_reference_across_chunks():
     rng = np.random.default_rng(1)
     B = make_anchors(16, 64, seed=0)
     flat, offsets = _ragged(rng, [3, 1, 7, 4, 10, 2], dim=16)
@@ -58,7 +46,7 @@ def test_batched_matches_single_across_chunks():
         for center in (None, mu):
             expected = np.stack(
                 [
-                    smve_single(flat[offsets[i] : offsets[i + 1]], B, 5, is_query, center=center)
+                    _dense_reference(flat[offsets[i] : offsets[i + 1]], B, 5, is_query, center)
                     for i in range(len(offsets) - 1)
                 ]
             )
@@ -85,7 +73,7 @@ def test_reps_equal_concatenated_independent_blocks():
             np.testing.assert_allclose(got.toarray(), expected, rtol=1e-5, atol=1e-6)
         single = np.stack(
             [
-                smve_single(flat[offsets[i] : offsets[i + 1]], B, k, is_query, reps=R)
+                _dense_reference(flat[offsets[i] : offsets[i + 1]], B, k, is_query, reps=R)
                 for i in range(len(offsets) - 1)
             ]
         )
@@ -102,7 +90,7 @@ def test_empty_documents_encode_to_zeros_at_any_chunk_size():
     for is_query in (True, False):
         expected = np.stack(
             [
-                smve_single(flat[offsets[i] : offsets[i + 1]], B, 3, is_query)
+                _dense_reference(flat[offsets[i] : offsets[i + 1]], B, 3, is_query)
                 for i in range(len(lengths))
             ]
         )

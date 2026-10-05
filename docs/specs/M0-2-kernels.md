@@ -35,7 +35,7 @@ top_k(scores, k) -> np.ndarray  # indices; 1-D or 2-D; ties go to the lower inde
 ragged_ranges(starts, lengths); to_postings(doc_matrix) -> (indptr, rows, weights)
 postings_read(indptr, terms) -> int; score_postings(...)
 # kernels/smve.py
-topk_blocks(P, k, reps=1); smve_single(...); smve_encode(...) -> CSR; token_mean(flat, sample, seed)
+topk_blocks(P, k, reps=1); smve_encode(...) -> CSR; token_mean(flat, sample, seed)
 # kernels/rng.py
 splitmix64(seed, start, stop); standard_normal(seed, start, stop)
 make_anchors(d, w, seed=0, chunk_columns=4096) -> (d, w) float32; anchor_sha256(B) -> str
@@ -78,6 +78,9 @@ dcg(...); ndcg_at_k(ranked, qrel, k); recall_at_k(ranked, qrel, k); mean_metric(
 
 ## Changes
 
+- 2026-10-05 (after done, `Spec: none` cleanup): removed `smve_single`; the tests' dense
+  reference (now with `reps`) covers it. `smve_encode` reuses `maxsim._batches`. - ponytail
+  audit: a second reference implementation and a copied loop, owner OK
 - 2026-10-03: reviewer verdict "fix first". Fixed: SMVE crashed on an empty document alone in
   a chunk (int64 `bincount`); `top_k` was wrong for unsigned/bool scores; `maxsim_scores`
   accepted offsets that don't cover the token array; the kernels docstring matched AT4's grep.
