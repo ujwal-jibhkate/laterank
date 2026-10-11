@@ -52,13 +52,14 @@ class Manifest:
     stages: dict[str, dict]         # name -> {"type": str, ...}; opaque to storage
     default_pipeline: str           # e.g. "hybrid > maxsim@100"; parsed in M1
     segments: tuple[SegmentInfo, ...]
-    format_version: int = FORMAT_VERSION
+    # no format_version field: to_dict writes FORMAT_VERSION, from_dict rejects any other
     created_with: str = "laterank <__version__>"
     created_at: str = "<UTC now, ISO-8601, e.g. 2026-10-06T12:00:00Z>"
     def to_dict(self) -> dict: ...
     @classmethod
     def from_dict(cls, d: dict) -> "Manifest": ...   # validates; IndexFormatError
 def write_manifest(index_dir: Path, manifest: Manifest) -> None   # atomic
+    # ValueError (nothing written) if the manifest wouldn't read back equal
 def read_manifest(index_dir: Path) -> Manifest                     # IndexFormatError
 
 # storage/arrays.py
@@ -114,32 +115,32 @@ def open_index(index_dir: Path) -> tuple[Manifest, list[Segment]]
 
 ## Acceptance tests
 
-- [ ] AT1: `write_manifest` → `read_manifest` returns an equal `Manifest`; the JSON on disk has
+- [x] AT1: `write_manifest` → `read_manifest` returns an equal `Manifest`; the JSON on disk has
   exactly the documented keys.
-- [ ] AT2: `read_manifest` raises `IndexFormatError` with a message saying what to do for each of:
+- [x] AT2: `read_manifest` raises `IndexFormatError` with a message saying what to do for each of:
   a newer `format_version` (names `created_with`, says to upgrade), a missing or non-integer
   version, a wrong `format`, truncated/invalid JSON, a missing or unknown key, and `hf_id`
   without a 40-hex `revision`.
-- [ ] AT3: a half-written manifest never replaces a good one: a failure during serialization, and
+- [x] AT3: a half-written manifest never replaces a good one: a failure during serialization, and
   one just before `os.replace`, leave the old file byte-identical with no temp file left; a
   subprocess hard-killed (`os._exit`) between writing the temp file and the swap leaves the old
   manifest readable.
-- [ ] AT4: arrays round-trip exactly for float16, float32, int32 and int64, including empty
+- [x] AT4: arrays round-trip exactly for float16, float32, int32 and int64, including empty
   arrays; `load_array(mmap=True)` returns a read-only `np.memmap`.
-- [ ] AT5: pickled data is rejected: an object-dtype `.npy` and a raw pickle saved as `.npy` both
+- [x] AT5: pickled data is rejected: an object-dtype `.npy` and a raw pickle saved as `.npy` both
   raise `IndexFormatError`, with mmap on and off; `save_array` refuses object dtype;
   `grep -rn "allow_pickle=True" src/` finds nothing.
-- [ ] AT6: docs round-trip with non-ASCII text, newlines inside text, `None` text and nested
+- [x] AT6: docs round-trip with non-ASCII text, newlines inside text, `None` text and nested
   metadata; reading row i via its byte offset returns exactly document i.
-- [ ] AT7: `load_ragged` rejects offsets that don't start at 0, decrease, or don't end at
+- [x] AT7: `load_ragged` rejects offsets that don't start at 0, decrease, or don't end at
   `len(flat)`.
-- [ ] AT8: `write_segment` → `open_segment` round-trips; a failure mid-write leaves no
+- [x] AT8: `write_segment` → `open_segment` round-trips; a failure mid-write leaves no
   `seg-XXXXXX/` folder; `open_index` ignores unlisted segment folders and raises
   `IndexFormatError` for a listed one that is missing.
 - [ ] AT9: `tests/test_layers.py` also checks that `errors.py` and `_version.py` import only the
   stdlib; `grep -rn "import torch" src/laterank/storage` finds nothing; `uv run pytest -q` and
   `uv run ruff check .` pass on all three CI operating systems.
-- [ ] AT10: the reviewer agent's verdict is `merge`.
+- [x] AT10: the reviewer agent's verdict is `merge`.
 
 ## Tasks
 
@@ -152,6 +153,12 @@ def open_index(index_dir: Path) -> tuple[Manifest, list[Segment]]
 
 ## Changes
 
+- 2026-10-11: second review round. `read_manifest` checks `is_file()` first (Windows raises `PermissionError` for a folder); `write_segment` counts tokens and refuses a 0-d `tokens/flat.npy` before writing; only `None` metadata becomes `{}`; unserializable stages are a `ValueError`. Recorded: missing `title`/`text`/`metadata` are stored as `None`/`None`/`{}`; `load_ragged` always reads `offsets` into memory. Deferred to M1 (`# ponytail:` note): case-only folder clashes and Windows-reserved names in array paths. - reviewer "fix first"
+- 2026-10-11: review fixes. `write_manifest` raises `ValueError` and writes nothing when its JSON wouldn't read back equal (tuples, int keys, NaN, stages mutated after construction); `write_docs` does the same per document and deletes a partial `docs.jsonl`; array paths with `:` or differing only by case are refused. Recorded small decisions: segment numbers are capped at 999,999; documents reject unknown keys and duplicate ids; dataclass constructors raise `ValueError` (`from_dict` turns it into `IndexFormatError`). - reviewer verdict "fix first"; no interface added or removed
+- 2026-10-05: removed the `Manifest.format_version` field; `to_dict` writes the constant
+  `FORMAT_VERSION`. The JSON is unchanged. - it could only ever hold 1 (ponytail audit, owner OK)
+- 2026-10-04: added a private helper module `storage/_fsync.py` (`fsync_folder`), shared by
+  the manifest and segment writers. Internal only; no interface changes. - avoid duplicating it
 - 2026-10-03: approved as drafted: unknown manifest keys are rejected, one checkpoint (not
   split), no Windows retry loop for `os.replace` unless CI shows a need.
 - 2026-10-03: drafted.

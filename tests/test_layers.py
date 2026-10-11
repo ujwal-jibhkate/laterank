@@ -2,6 +2,7 @@
 never import torch (or anything else that would make `pip install laterank` heavy)."""
 
 import ast
+import sys
 from pathlib import Path
 
 import pytest
@@ -47,11 +48,26 @@ def test_imports_point_down(layer, path):
 
 @pytest.mark.parametrize(("layer", "path"), [p for p in _modules() if p.values[0] in LIGHT_LAYERS])
 def test_bottom_layers_stay_light(layer, path):
-    import sys
-
     stdlib = sys.stdlib_module_names
     for name in _imports(path):
-        top = name.split(".")[0]
-        assert top in stdlib or top in LIGHT_DEPS or top == "laterank", (
+        top, *rest = name.split(".")
+        if top == "laterank":  # not `laterank` itself: its __init__ will import the api layer
+            assert rest and rest[0] in LIGHT_LAYERS | {"errors", "_version"}, (
+                f"{path.name}: '{layer}' may only import kernels/storage/errors/_version, "
+                f"but imports '{name}'"
+            )
+            continue
+        assert top in stdlib or top in LIGHT_DEPS, (
             f"{path.name}: '{layer}' may only use numpy/scipy/stdlib, but imports '{name}'"
         )
+
+
+# Leaf modules at the package root that every layer may import: they import only the stdlib.
+LEAF_MODULES = ["errors.py", "_version.py"]
+
+
+@pytest.mark.parametrize("name", LEAF_MODULES)
+def test_leaf_modules_import_only_the_stdlib(name):
+    for imported in _imports(PKG / name):
+        top = imported.split(".")[0]
+        assert top in sys.stdlib_module_names, f"{name} must stay stdlib-only, imports '{imported}'"

@@ -5,13 +5,11 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M0: foundations** (planned Oct 5–9, 2026).
-- Checkpoint 1 (skeleton) is committed: pyproject, src layout, `kernels/` and `storage/`
-  packages, CI workflow, `tests/test_layers.py`.
-- Checkpoint 2 (kernels) is done: committed (`9659cf9`), reviewed (`merge`), spec M0-2 marked
-  done by the owner. 85 tests pass.
-- Checkpoint 3 (storage): spec M0-3 approved 2026-10-03; building starts with task 1. Checkpoint 4
-  (golden harness) not started.
+- Milestone **M0: foundations**. Checkpoints 1 (skeleton) and 2 (kernels) are done.
+- Checkpoint 3 (storage, spec M0-3 approved): built, and all 5 review defects fixed (2026-10-11).
+  197 tests pass, **uncommitted until the owner says so**. AT1–AT8 and AT10 ticked (third
+  review: merge once the huge-int fix landed, which it did); AT9 waits for the first CI run.
+- Checkpoint 4 (golden harness) not started. Nothing has been pushed yet, so CI has never run.
 
 ## M0 checklist
 
@@ -29,9 +27,66 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `inverted_index.py` | `kernels/inverted.py` | class → pure functions over `(indptr, rows, weights)`; scores returned as float32 |
 | `smve.py` | `kernels/smve.py` | torch → numpy (`argpartition`, `bincount`, `np.unique`); anchors from `kernels/rng.py`; `token_mean` samples with the portable RNG and accumulates in float64 |
 | `smve.make_anchors` (torch.Generator) | `kernels/rng.py` | new: SplitMix64 + Box–Muller with polynomial log/sin/cos, bit-identical on every platform; `anchor_sha256` |
+| `storage.py` (save/load embeddings) | `storage/{arrays,manifest,docs,segment}.py` | new index format: manifest + segment folders, atomic writes, `allow_pickle=False`, no duplicate `.npz` copy |
 | `metrics.py` (nDCG, Recall) | `kernels/metrics.py` | pandas dropped; `mean_metric` replaces `evaluate_run`; P/MRR/MAP wait for M2 |
 
 ## Log
+
+### 2026-10-11 (storage review fixes)
+- **Done**: fixed all 5 review defects plus the 'also proposed' items (case-colliding array
+  paths, storage may import only kernels/storage/errors/_version, `DocStore` docstring,
+  hypothesis round trip for docs, decisions logged under spec Changes). Item 1 was already
+  fixed in the tree. Ticked AT2.
+- **Review rounds 2 and 3**: fixed Windows `PermissionError` on a folder manifest (`is_file()`
+  check), token count before the segment rename, falsy metadata, `TypeError`→`ValueError` in
+  `write_manifest`, non-dict doc lines, unclosed `NpzFile`, `RecursionError` and 4300-digit ints
+  in JSON. Deleted `Segment.__repr__`, `_fsync_tree`, one trivial test. Deferred (ponytail note in
+  `segment.py::_check_relpath`): case-only folder clashes, Windows-reserved names, file/folder
+  path clashes.
+- **Next**: owner OKs the commits; then push (owner only) so CI runs AT9 on three OSes.
+
+### 2026-10-05 (storage build and review)
+- **Done**: built M0-3 tasks 1–4: `errors.py`, `_version.py`, `storage/{arrays,manifest,docs,
+  segment,_fsync}.py`, `tests/storage/test_{arrays,manifest,docs,segment}.py`, a stdlib-only
+  check for leaf modules in `tests/test_layers.py`. Includes a hard-kill subprocess test for the
+  manifest and an end-to-end test (store tokens → reopen memory-mapped → MaxSim).
+- **Decisions**: `storage/_fsync.py` holds `fsync_folder` for both writers (spec Changes, 10-04).
+- **Review (fix first), confirmed by hand.** Proposed fixes, waiting for the owner's OK:
+  1. `segment.py::_check_relpath` accepts `"C:/x.npy"`, `"C:x.npy"`, `"x.npy:ads.npy"`, which
+     escape the segment folder on Windows → reject any `:` and Windows-absolute paths; add to the
+     bad-paths test.
+  2. `write_manifest` writes a manifest it can't read back (stages mutated after construction,
+     tuples, int keys) → parse its own output and require equality before touching disk.
+  3. `load_array(mmap=False)` lets `MemoryError` escape (header claims a huge shape);
+     `load_ragged` crashes with `TypeError` on 0-d `flat` → `IndexFormatError` for both.
+  4. Wrong-`format` message has no action (fails AT2) → add one.
+  5. Raw errors: `DocStore.ids()` (`KeyError`/`JSONDecodeError`), `write_docs` (`TypeError`,
+     partial file, NaN, int keys → strict read-back check, delete partial file), `read_manifest`
+     on a folder (`IsADirectoryError` → wrap; leave `PermissionError` raw).
+  Also proposed: reject array keys that collide under `casefold()`; restrict storage's
+  `laterank.*` imports in `test_layers.py` to kernels/storage/errors/_version; reword the
+  `DocStore` "can always be renamed" docstring (memmaps hold files open on Windows); a hypothesis
+  round-trip test for docs; record small decisions (segment cap 999,999, docs reject unknown
+  keys/duplicate ids, constructors raise `ValueError`) under spec Changes.
+  Skipped: fsync failing after a successful rename (document only), `Manifest` hashability,
+  numpy error-text matching (misses still become `IndexFormatError`).
+- **Next**: owner agrees to (or edits) the fix list above; then fix item 1 first
+  (`_check_relpath` + test), then 2–5, re-run the reviewer, tick AT2/AT10, commit `Spec: M0-3`.
+
+### 2026-10-05
+- **Done**: installed the `ponytail` plugin (DietrichGebert/ponytail v4.12.0) at project scope
+  (`.claude/settings.json`). Wired it into `CLAUDE.md`, the implementer and reviewer agents
+  (the reviewer now returns a **Delete-list**), the `/spec`, `port-module` and `/wrap-up` skills,
+  the spec template (`Skipped: X, add when Y`) and `START_HERE.md` §5.
+- **Decisions**: specs, checkpoint stops and teaching explanations override ponytail's
+  "ship it, explain in 3 lines". There is a "never cut" list in `CLAUDE.md`.
+- **Ponytail audit applied**: commit `30318d9` (`Spec: none`) removed `kernels/smve.py::smve_single`
+  (the tests' `_dense_reference` now takes `reps` and is the only reference), and `smve_encode` now
+  reuses `maxsim._batches`. In M0-3 (uncommitted): `DocStore` reuses `arrays._ragged_problem`;
+  `segment.py` reuses `manifest._SEGMENT_ID`; `Manifest.format_version` field removed (spec
+  change logged). Kept `show_progress`/tqdm: owner wants progress bars. 177 tests pass.
+- **Next**: continue M0-3. The storage code and its tests exist, uncommitted; tick the
+  acceptance tests, run the reviewer, then `/wrap-up` to commit.
 
 ### 2026-10-03 (session 2)
 - **Done**: committed the spec-workflow tooling on its own. Reviewer agent on the kernels: "fix
