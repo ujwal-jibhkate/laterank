@@ -30,6 +30,8 @@ wasn't here today.
        asking ("write the naive-loop test for `kernels/maxsim.py::maxsim_scores`", not "continue
        kernels").
    - Update the **Ported from smve-lab** table if code moved over.
+   - Run `grep -rn "ponytail:" src tests`. Under **Decisions**, list any shortcuts added today,
+     each with its ceiling and when to upgrade it.
    - Keep each entry under about 20 lines. The log is a map, not a diary.
 4. Show the owner a short summary of the changes and a proposed commit message: a subject line of
    72 characters or fewer in the imperative, then a body explaining *why*, and a final line

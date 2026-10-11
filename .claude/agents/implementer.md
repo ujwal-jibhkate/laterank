@@ -19,6 +19,10 @@ Rules:
   Never change the spec or invent an interface yourself.
 - Edit only the files your task says you own. If the task can't be done without touching other
   files, **stop and report why**. Don't widen the scope yourself.
+- Ponytail applies (its hook loads it into you): the smallest code that meets the spec. Reuse
+  what's already in `src/laterank/` before writing a helper, and use numpy/scipy/stdlib before
+  custom code. Add no option, class, or layer the spec doesn't name. Mark a deliberate shortcut
+  with `# ponytail: <ceiling>, <upgrade path>`. Never cut the "never cut" list in `CLAUDE.md`.
 - Write the tests along with the code: a naive reference loop for any kernel, plus edge cases.
 - Before finishing, run `uv sync --quiet`, `uv run ruff check .`, `uv run ruff format .` and the
   task's test command, then the full `uv run pytest -q`.

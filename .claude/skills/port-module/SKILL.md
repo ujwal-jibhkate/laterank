@@ -14,10 +14,14 @@ reference numbers (see the `golden-values` skill).
 1. **Read the original and its tests in full** before writing anything. Note every constant (for
    example `k1=1.2`, `b=0.75`, the `2**26` chunk size, the 200,000-token sample in `token_mean`) and
    keep them, unless the owner agrees to a change.
-2. **Choose the layer** (see CLAUDE.md). Math on arrays goes in `kernels/`, reading and writing
+2. **Port only what the spec needs.** smve-lab is research code with experiment options,
+   progress bars, and alternative paths. Bring over the code path the spec's Interfaces use, and
+   leave the rest behind (note it in the spec's **Out of scope**). Ponytail's ladder applies to
+   everything you write.
+3. **Choose the layer** (see CLAUDE.md). Math on arrays goes in `kernels/`, reading and writing
    files goes in `storage/`, and anything that loads a model goes in `components/`, imported
    lazily.
-3. **Convert torch to numpy** (kernels/ and storage/ never import torch):
+4. **Convert torch to numpy** (kernels/ and storage/ never import torch):
 
    | torch | numpy |
    |---|---|
@@ -30,16 +34,16 @@ reference numbers (see the `golden-values` skill).
 
    Keep float32 throughout. Watch for silent upcasts to float64: `np.mean` of float16 data, or
    mixing in Python floats.
-4. **Keep the teaching style.** smve-lab modules open with a docstring explaining *what* the
-   method does and *why*. Keep and adapt it. Every public function gets type hints and a
-   docstring stating array shapes and dtypes.
-5. **Test** (in `tests/`, mirroring the package path):
+5. **Keep the teaching style.** smve-lab modules open with a docstring explaining *what* the
+   method does and *why*. Keep and adapt it, in a few lines rather than an essay. Every public
+   function gets type hints and a docstring stating array shapes and dtypes.
+6. **Test** (in `tests/`, mirroring the package path):
    - a slow, obvious reference loop, compared on small random inputs
      (`np.testing.assert_allclose` with `rtol=1e-5`)
    - a hypothesis property test where there's a natural property (order invariance,
      monotonicity, scaling)
    - edge cases: an empty doc, a one-token doc, k ≥ width, a single query
-6. **Any deliberate behavior change** (such as the RNG) gets written down in three places: the
+7. **Any deliberate behavior change** (such as the RNG) gets written down in three places: the
    docstring, the progress log's **Decisions**, and a test that pins the new behavior.
-7. **Add a row** to the "Ported from smve-lab" table in `docs/dev/progress.md`:
+8. **Add a row** to the "Ported from smve-lab" table in `docs/dev/progress.md`:
    `smve-lab file → laterank file | what changed`.

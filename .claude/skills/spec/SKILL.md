@@ -26,6 +26,9 @@ Read `docs/specs/README.md` first. Then do one of the following, depending on th
      reviewer's `merge` verdict as the last one.
    - **Tasks**: ordered, each owning distinct files. Mark which ones can run in parallel
      (`/split-work` reads this table).
+   - **Ponytail pass**: before writing an interface or task, ask whether this checkpoint needs
+     it at all, and whether numpy/scipy/stdlib or existing laterank code already does it. Anything
+     you leave out goes under **Out of scope** as `Skipped: <X>, add when <Y>`.
    - Keep it to about one page. If it's longer, the checkpoint is too big: propose splitting it.
 3. Run `python3 scripts/specs.py check`.
 4. Explain the spec to the owner in plain words: the goal, the 2–3 decisions that matter most,

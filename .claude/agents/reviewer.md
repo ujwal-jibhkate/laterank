@@ -18,6 +18,11 @@ Check, in this order:
    acceptance test the change claims to cover really have a passing test? Is there code the spec
    doesn't ask for? Is a decision made in the code missing from the spec's **Decisions** or
    **Changes**?
+0b. **Over-engineering (ponytail).** For each changed file, ask: could this be deleted, reuse
+   something already in `src/laterank/`, or be done with numpy/scipy/stdlib? Look for one-use
+   helpers or classes, options nobody passes, defensive checks on internal (non-API) paths, and
+   dead code. List each one as a deletion with `path:line` and its replacement. Never list
+   anything on `CLAUDE.md`'s "never cut" list.
 1. **Correctness.** Does the code compute what its docstring says? Compare it against the smve-lab
    original in `~/Projects/smve-lab/src/smve_lab/` when it was ported. Look at off-by-one errors in
    offsets and reduceat boundaries, empty docs, k ≥ width, float16 to float32 handling, and silent
@@ -39,5 +44,6 @@ Output:
 - **Findings**: at most 10, most severe first. Each one gets `path:line`, a one-sentence defect,
   and a concrete failure scenario (input → wrong result). Skip style nitpicks that ruff doesn't
   flag.
+- **Delete-list**: the 0b items (or "none"). They alone never make the verdict `fix first`.
 - **Spec status**: each acceptance test as `pass`, `fail`, or `not covered`.
 - **Tests run**: commands and their pass/fail counts.

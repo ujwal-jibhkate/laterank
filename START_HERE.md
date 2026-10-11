@@ -68,6 +68,10 @@ python3 scripts/specs.py active
 | `/spec <id> [approve\|done\|change "..."]` | write or move a spec through its life |
 | `/split-work` | run 2–4 independent tasks in parallel with agents |
 | `/explain <topic>` | teaches you something from the code, with a small example it runs |
+| `/ponytail [lite\|full\|ultra\|off]` | how hard Claude pushes for less code (default `full`); no argument shows the level |
+| `/ponytail-review` | lists over-built code in the current diff as a delete-list |
+| `/ponytail-audit` | the same, for the whole repo |
+| `/ponytail-debt` | collects every `# ponytail:` shortcut into one list |
 | `@agent-reviewer review my changes` | a read-only review: `merge` or `fix first` |
 | `@agent-researcher how does bm25s store postings?` | research with sources |
 | `/clear` | start fresh in the same terminal (do this between unrelated tasks) |
@@ -113,7 +117,28 @@ plenty, since each one costs about as much as a full session.
 
 ---
 
-## 5. Where everything lives
+## 5. Ponytail: less code
+
+The `ponytail` plugin is on for this repo. It makes Claude (and every agent) climb a ladder
+before writing code: *is it needed at all → does laterank already have it → numpy/stdlib →
+one line → only then the minimum that works.* It never cuts safety: no-pickle loads, atomic
+writes, input validation, golden tests (full list in `CLAUDE.md`).
+
+How it fits the spec workflow:
+- `/spec` asks "do we need this?" while drafting. Skipped things are listed in the spec's
+  **Out of scope** as `Skipped: X, add when Y`.
+- Implementers build only what the spec names. The reviewer adds a **Delete-list** of over-built
+  code to every review.
+- A deliberate shortcut gets a `# ponytail: <limit>, <upgrade path>` comment, and `/wrap-up`
+  logs it.
+- Explanations to you stay full length. Ponytail shrinks code, not teaching.
+
+It installs itself on a fresh clone: Claude Code reads `.claude/settings.json` and asks you to
+trust the `ponytail` marketplace the first time.
+
+---
+
+## 6. Where everything lives
 
 ```text
 START_HERE.md            ← you are here
@@ -126,12 +151,12 @@ scripts/specs.py         the program that enforces the spec rules
 scripts/git-hooks/       git hook: Spec trailer required, no Claude attribution
 .claude/skills/          /start-session, /wrap-up, /spec, /split-work, /explain, port-module, golden-values
 .claude/agents/          implementer, reviewer, researcher
-.claude/settings.json    the hook that blocks code edits without an approved spec
+.claude/settings.json    the spec hook (blocks code edits without an approved spec) + the ponytail plugin
 ```
 
 ---
 
-## 6. When something blocks you
+## 7. When something blocks you
 
 | you see | why | do this |
 |---|---|---|
@@ -146,7 +171,7 @@ scripts/git-hooks/       git hook: Spec trailer required, no Claude attribution
 
 ---
 
-## 7. Setting up a fresh clone or a new machine
+## 8. Setting up a fresh clone or a new machine
 
 ```bash
 git clone https://github.com/ujwal-jibhkate/laterank.git && cd laterank
@@ -160,10 +185,11 @@ For golden tests you also need smve-lab's embeddings (~14 GB, never committed) a
 
 ---
 
-## 8. House rules (short version)
+## 9. House rules (short version)
 
 - Claude never adds Co-Authored-By or "Generated with" lines. The git hook enforces this.
 - Claude commits only when you say so, and never pushes. **You** push.
 - `kernels/` and `storage/` never import torch. Imports point down the layers only.
 - Reference numbers come from the `golden-values` skill, never from memory.
 - When you don't understand something: `/explain <it>`.
+- Ponytail is on: the least code that works, never at the cost of safety. `/ponytail off` turns it off for a session.

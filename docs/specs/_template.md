@@ -16,6 +16,7 @@ for laterank.
 
 - Things someone might expect here that this checkpoint will **not** do, and where they go
   instead.
+- Skipped on purpose (ponytail): `Skipped: <X>, add when <Y>`.
 
 ## Interfaces
 

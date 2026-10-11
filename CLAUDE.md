@@ -14,6 +14,28 @@ design is `~/Projects/smve-lab/docs/library_design_explained.md` (it calls the l
 - **Commit only when told to. Never push.** Exception: `implementer` agents may commit on their
   own worktree branch (never on main).
 
+## Ponytail: write the least code that works
+
+The `ponytail` plugin is installed for this project (`.claude/settings.json`). Its hooks load
+its rules into every session and every subagent. Default level: `full`. Before writing code,
+stop at the first rung that holds: is it needed at all → already in laterank → stdlib/numpy/
+scipy → an installed dependency → one line → only then the minimum that works.
+
+How it fits this repo (these override ponytail where they differ):
+- **Specs come first.** Rung 1 ("does this need to exist?") is asked while *drafting* a spec,
+  not while building it. During a build, implement exactly the spec's Interfaces, and nothing
+  more. If an approved interface looks unnecessary, propose `/spec <id> change`. Don't drop it
+  quietly.
+- **Explanations are requested.** The owner is learning, so plain-words explanations and the
+  checkpoint stops are explicitly asked for. Ponytail keeps the *code* small, not the teaching.
+- **Tests the spec or `port-module` asks for are requested.** Kernels keep their naive-loop
+  reference tests. Don't add tests nobody asked for beyond one check per non-trivial branch.
+- **Never cut, whatever the level:** `allow_pickle=False`, atomic manifest writes
+  (temp + fsync + `os.replace`), validation at the public API boundary, the portable RNG,
+  golden-value reproduction, and the layer/no-torch rules.
+- Mark a deliberate shortcut that has a known ceiling with `# ponytail: <ceiling>, <upgrade path>`.
+  `/wrap-up` lists them in the progress log.
+
 ## Spec-driven development (enforced)
 
 - Every checkpoint has a spec in `docs/specs/<id>-<slug>.md` (rules: `docs/specs/README.md`).
