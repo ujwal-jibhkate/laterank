@@ -1,7 +1,7 @@
 ---
 id: M1-2
 title: Lexical and hybrid first stages
-status: approved
+status: done
 approved: 2026-10-11
 ---
 
@@ -151,7 +151,7 @@ seg-000001/lexical/weights.npy   (nnz,) float32
 - [x] AT6: golden SciFact, ±0.002 (`results/cross_dataset/summary.md`), nDCG@10 / Recall@100:
   `lexical` 0.6376 / 0.8980, `hybrid` 0.6842 / 0.9237, `lexical > maxsim@100` 0.7048 / 0.8980,
   `hybrid > maxsim@100` 0.6977 / 0.9237.
-- [ ] AT7: `uv run pytest -q` and `uv run ruff check .` pass on all three CI operating systems.
+- [x] AT7: `uv run pytest -q` and `uv run ruff check .` pass on all three CI operating systems.
 - [x] AT8: the reviewer agent's verdict is `merge`.
 
 ## Tasks
