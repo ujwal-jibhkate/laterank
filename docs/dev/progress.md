@@ -5,11 +5,11 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M0: foundations** is complete: checkpoints 1–4 are done (M0-4 closed 2026-10-12).
-- CI ran for the first time on 2026-10-11 (run 38185959601): 197 passed on ubuntu/macos/windows ×
-  py3.12/3.13, so M0-2's cross-platform RNG claim and M0-3's AT9 now hold everywhere.
-- Next milestone: **M1, methods + measurements** (all stages, presets, golden tests per stage).
-  No spec is approved; the first M1 spec is not drafted yet.
+- Milestone **M0: foundations** is complete: checkpoints 1–4 done, all pushed, CI green on
+  ubuntu/macos/windows × py3.12/3.13 (199 passed, 2 golden tests skip without data).
+- Golden harness works: SciFact exhaustive and dense match smve-lab to 5 decimals.
+- Next milestone: **M1, methods + measurements**. No spec is approved; M1-1 is not drafted yet.
+- Nothing is broken. Known ceilings: the two `# ponytail:` notes listed in the 2026-10-11 entry.
 
 ## M0 checklist
 
@@ -31,6 +31,28 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `metrics.py` (nDCG, Recall) | `kernels/metrics.py` | pandas dropped; `mean_metric` replaces `evaluate_run`; P/MRR/MAP wait for M2 |
 
 ## Log
+
+### 2026-10-11 (wrap-up: M0 closed, M1 order agreed)
+- **Done**: closed M0-3 and M0-4 after CI confirmed them (`d3afe51`). The spec hook now also asks
+  before a Bash command sets a spec status (`scripts/specs.py`, `.claude/settings.json`), and
+  `.gitattributes` keeps the qrels TSV byte-exact (`0f3ba0d`).
+- **Decisions**: M1 order, proposed by Claude, owner said "you pick": M1-1 Index + pipeline with
+  `dense` first (precomputed vectors, no torch; golden `dense > maxsim@100` = 0.6966) → M1-2
+  lexical + hybrid (0.6977) → M1-3 BM25 (0.6896 / 0.7086) → M1-4 SMVE (band [0.537, 0.572])
+  → M1-5 MUVERA → M1-6 encoders + presets. Why dense first: no new math, so M1-1 can focus
+  on the `Stage`/`Index`/`Pipeline` interfaces. BM25 carries the most new design (tokenizer,
+  corpus-wide stats that must survive new segments).
+- **Shortcuts with a ceiling** (`# ponytail:`): `storage/segment.py::_check_relpath` misses
+  case-only folder clashes, Windows-reserved names and file/folder clashes; upgrade to
+  per-component checks if users ever choose array paths. `scripts/specs.py` checks shell
+  commands by text match; upgrade to a PostToolUse diff of spec statuses if it proves too weak.
+- **Surprises**: the CRLF qrels file needed `.gitattributes` to stay hash-stable. The earlier
+  hook gap let a Bash script approve a spec without the owner's prompt (owner had typed the
+  approval, so no harm).
+- **Next**: start the `researcher` agent on: how PyTerrier (`>>` pipelines), PyLate, RAGatouille,
+  bm25s and sentence-transformers represent a first stage vs a reranker, and how a pipeline is
+  written down so it can be saved in a manifest. Then `/spec M1-1` (Index + pipeline, dense
+  first) from its report, the design doc §3–6, and the `golden-values` skill.
 
 ### 2026-10-11 (golden harness)
 - **Done**: M0-4 approved with option (a) (commit the CC BY-SA 4.0 qrels with a README) and built:
