@@ -1,7 +1,7 @@
 ---
 id: M0-4
 title: Golden harness
-status: approved
+status: done
 approved: 2026-10-11
 ---
 
@@ -79,7 +79,7 @@ def test_dense(scifact): ...               # q_dense @ d_dense.T -> top_k(…, 1
 
 ## Acceptance tests
 
-- [ ] AT1: with `LATERANK_GOLDEN_DIR` unset, `uv run pytest -q` passes and both golden tests are
+- [x] AT1: with `LATERANK_GOLDEN_DIR` unset, `uv run pytest -q` passes and both golden tests are
   reported as skipped. CI does the same on all three operating systems.
 - [x] AT2: with `LATERANK_GOLDEN_DIR` set to a folder that doesn't exist, the golden tests fail,
   and the message names that path.

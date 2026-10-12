@@ -5,17 +5,18 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M0: foundations**. Checkpoints 1 (skeleton), 2 (kernels) and 3 (storage) are done.
+- Milestone **M0: foundations** is complete: checkpoints 1–4 are done (M0-4 closed 2026-10-12).
 - CI ran for the first time on 2026-10-11 (run 38185959601): 197 passed on ubuntu/macos/windows ×
   py3.12/3.13, so M0-2's cross-platform RNG claim and M0-3's AT9 now hold everywhere.
-- Checkpoint 4 (golden harness): spec M0-4 approved and built; waiting on reviewer + CI.
+- Next milestone: **M1, methods + measurements** (all stages, presets, golden tests per stage).
+  No spec is approved; the first M1 spec is not drafted yet.
 
 ## M0 checklist
 
 - [x] 1. Skeleton: uv + hatchling/hatch-vcs, Apache-2.0, extras declared, CI (3 OS × py3.12/3.13)
 - [x] 2. Kernels: MaxSim, top-k, CSC scoring, SMVE encode, portable SplitMix64 anchors + SHA-256, metrics
 - [x] 3. Storage: manifest.json (atomic write), segments, `.npy` with mmap and no pickle, docs.jsonl + offsets
-- [ ] 4. Golden harness: `LATERANK_GOLDEN_DIR`, SciFact qrels fixture, exhaustive 0.6991 and dense 0.6542
+- [x] 4. Golden harness: `LATERANK_GOLDEN_DIR`, SciFact qrels fixture, exhaustive 0.6991 and dense 0.6542
 
 ## Ported from smve-lab
 
@@ -36,7 +37,10 @@ This file is the project's memory between Claude Code sessions. `/start-session`
   `tests/golden/{conftest.py,test_scifact.py,data/}`. With smve-lab's embeddings, SciFact exhaustive
   0.69912 / 0.92033 and dense 0.65418 / 0.89700 (nDCG@10 / Recall@100) match smve-lab to 5 decimals.
   `pytest -m slow` takes 27 s (exhaustive MaxSim 26.4 s in numpy vs 27.6 s in smve-lab's torch).
-- **Next**: reviewer (AT7); commit `Spec: M0-4`; push so CI confirms AT1; `/spec M0-4 done`.
+- **Then**: reviewer `merge`; committed `dbba2bb` (`Spec: M0-4`) and `0f3ba0d` (hook now asks
+  before shell commands set a spec status; `.gitattributes` pins the qrels bytes). CI green on
+  both (199 passed, 2 golden skipped, on 3 OS × 2 Pythons). M0-4 marked done.
+- **Next**: plan M1. Use the `researcher` agent before designing the first stage, then `/spec`.
 
 ### 2026-10-11 (storage review fixes)
 - **Done**: fixed all 5 review defects plus the 'also proposed' items (case-colliding array
