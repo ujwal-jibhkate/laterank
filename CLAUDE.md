@@ -81,4 +81,6 @@ How it fits this repo (these override ponytail where they differ):
 - `uv sync` — install core + dev dependencies
 - `uv run pytest` — all tests; golden tests skip themselves unless `LATERANK_GOLDEN_DIR` is set
 - `LATERANK_GOLDEN_DIR=... uv run pytest -m slow` — golden tests only
+- `cd ~/Projects/smve-lab && uv run python ~/Projects/laterank/scripts/export_golden_texts.py` —
+  once per machine: the raw texts the golden `bm25` tests need
 - `uv run ruff check . && uv run ruff format --check .` — lint

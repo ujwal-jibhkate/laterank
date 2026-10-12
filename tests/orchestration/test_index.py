@@ -8,6 +8,7 @@ import pytest
 import scipy.sparse as sp
 
 from laterank.components.base import Encoded
+from laterank.components.bm25 import BM25Stage
 from laterank.components.dense import DenseStage
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import LexicalStage
@@ -275,3 +276,81 @@ def test_create_refuses_non_finite_weights(tmp_path):
         with pytest.raises(ValueError, match="finite"):
             Index.create(tmp_path / "ix", docs, tokens, encoder=ENCODER, **kwargs)
         assert not (tmp_path / "ix").exists()
+
+
+WORDS = "protein cell growth insulin diabetes tumor gene vaccine virus heart".split()
+
+
+def _with_bm25():
+    docs, tokens, dense, q = _data()
+    rng = np.random.default_rng(2)
+    for d in docs:
+        d["title"] = str(rng.choice(WORDS))
+        d["text"] = " ".join(rng.choice(WORDS, size=rng.integers(0, 8)))
+    return docs, tokens, dense, replace(q, text="Cells and tumor growth; zebrafish")
+
+
+def test_bm25_matches_the_pipeline(tmp_path):
+    docs, (flat, offsets), dense, q = _with_bm25()
+    path = tmp_path / "ix"
+    index = Index.create(path, docs, (flat, offsets), encoder=ENCODER, dense=dense, bm25=True)
+    on_disk = json.loads((path / "manifest.json").read_text())
+    vocab = len({w for d in docs for w in (d["title"] + " " + d["text"]).split()})
+    assert on_disk["stages"]["bm25"] == {
+        "type": "bm25",
+        "tokenizer": "ascii-snowball-en",
+        "k1": 1.2,
+        "b": 0.75,
+        "vocab": vocab,
+    }
+    stored = sorted(p.name for p in (path / "seg-000001" / "bm25").iterdir())
+    assert stored == ["indptr.npy", "rows.npy", "terms.npy", "tf.npy"]
+
+    a = BM25Stage.arrays([f"{d['title']}\n{d['text']}" for d in docs])
+    terms = a["bm25/terms.npy"].tobytes().decode().split("\n")
+    bm25 = BM25Stage(terms, *list(a.values())[1:], n_docs=len(docs))
+    stages = {"bm25": bm25, "maxsim": MaxSimReranker(flat, offsets)}
+    for spec, k in (("bm25", 10), ("bm25 > maxsim@20", 5)):
+        want = parse_pipeline(spec).run(stages, q, k)
+        hits = index.search(q, k, pipeline=spec)
+        assert [h.id for h in hits] == [f"d{r}" for r in want.rows]
+        assert [h.score for h in hits] == want.scores.tolist()
+
+    plain = Index.create(tmp_path / "plain", docs, (flat, offsets), encoder=ENCODER, dense=dense)
+    with pytest.raises(ValueError, match=r"first stages \['dense'\]"):
+        plain.search(q, pipeline="bm25")
+
+
+def test_bm25_refuses_a_corpus_without_words(tmp_path):
+    docs, tokens, dense, _ = _data()
+    for d in docs:
+        d["text"] = "the and of"
+    with pytest.raises(ValueError, match="no document"):
+        Index.create(tmp_path / "ix", docs, tokens, encoder=ENCODER, dense=dense, bm25=True)
+    with pytest.raises(ValueError, match="mapping"):
+        Index.create(tmp_path / "ix", ["abc"] * len(docs), tokens, encoder=ENCODER, bm25=True)
+    assert not (tmp_path / "ix").exists()
+
+
+def test_open_refuses_a_damaged_bm25_stage(tmp_path):
+    docs, tokens, dense, _ = _with_bm25()
+    path = tmp_path / "ix"
+    Index.create(path, docs, tokens, encoder=ENCODER, dense=dense, bm25=True)
+    manifest = read_manifest(path)
+    good = manifest.stages["bm25"]
+    for bad in (
+        {"vocab": good["vocab"] + 1},
+        {"tokenizer": "unicode-v2"},
+        {"k1": -1.0},
+        {"b": None},
+    ):
+        write_manifest(path, replace(manifest, stages={**manifest.stages, "bm25": good | bad}))
+        with pytest.raises(IndexFormatError, match="malformed"):
+            Index.open(path)
+
+    # NaN can't be written by write_manifest, so hand-edit the JSON
+    raw = json.loads((path / "manifest.json").read_text())
+    raw["stages"]["bm25"] = good | {"k1": float("nan")}
+    (path / "manifest.json").write_text(json.dumps(raw))
+    with pytest.raises(IndexFormatError):
+        Index.open(path)

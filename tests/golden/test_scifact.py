@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from laterank.components.base import Encoded
+from laterank.components.bm25 import BM25Stage
 from laterank.components.dense import DenseStage
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import LexicalStage
@@ -54,16 +55,23 @@ def test_dense(scifact):
     _check(scifact.q_dense @ scifact.d_dense.T, scifact, ndcg10=0.6542, recall100=0.8970)
 
 
-def _stages(data) -> dict:
+@pytest.fixture(scope="module")
+def stages(scifact) -> dict:
     """Every stage, built straight from smve-lab's memory-mapped arrays (no index copy)."""
-    dense = DenseStage(data.d_dense)
-    lexical = LexicalStage(*LexicalStage.arrays(data.d_lexical).values(), n_docs=len(data.doc_ids))
-    return {
+    n = len(scifact.doc_ids)
+    dense = DenseStage(scifact.d_dense)
+    lexical = LexicalStage(*LexicalStage.arrays(scifact.d_lexical).values(), n_docs=n)
+    stages = {
         "dense": dense,
         "lexical": lexical,
         "hybrid": HybridStage(dense, lexical, HYBRID_ALPHA),
-        "maxsim": MaxSimReranker(data.d_flat, data.d_offsets),
+        "maxsim": MaxSimReranker(scifact.d_flat, scifact.d_offsets),
     }
+    if scifact.d_texts is not None:
+        a = BM25Stage.arrays(scifact.d_texts)  # smve-lab's joined title + ". " + text
+        terms = a["bm25/terms.npy"].tobytes().decode().split("\n")
+        stages["bm25"] = BM25Stage(terms, *list(a.values())[1:], n_docs=n)
+    return stages
 
 
 # (pipeline, nDCG@10, Recall@100) from results/cross_dataset/summary.md. A `> maxsim@100` run
@@ -74,15 +82,27 @@ PIPELINES = [
     ("hybrid", 0.6842, 0.9237),
     ("lexical > maxsim@100", 0.7048, 0.8980),
     ("hybrid > maxsim@100", 0.6977, 0.9237),
+    ("bm25", 0.6896, 0.9249),
+    ("bm25 > maxsim@100", 0.7086, 0.9249),
 ]
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize(("spec", "ndcg10", "recall100"), PIPELINES)
-def test_pipeline(scifact, spec, ndcg10, recall100):
-    stages, pipeline, off = _stages(scifact), parse_pipeline(spec), scifact.q_offsets
+def test_pipeline(scifact, stages, spec, ndcg10, recall100):
+    pipeline, off = parse_pipeline(spec), scifact.q_offsets
+    if pipeline.first == "bm25" and scifact.q_texts is None:
+        pytest.fail(
+            "the SciFact texts are missing: run scripts/export_golden_texts.py once inside "
+            "smve-lab (see its docstring)"
+        )
     run = {}
     for i, qid in enumerate(scifact.query_ids):
-        q = Encoded(scifact.q_flat[off[i] : off[i + 1]], scifact.q_dense[i], scifact.q_lexical[i])
+        q = Encoded(
+            scifact.q_flat[off[i] : off[i + 1]],
+            scifact.q_dense[i],
+            scifact.q_lexical[i],
+            None if scifact.q_texts is None else scifact.q_texts[i],
+        )
         run[qid] = [scifact.doc_ids[r] for r in pipeline.run(stages, q, 100).rows]
     _check_run(run, scifact, ndcg10, recall100)

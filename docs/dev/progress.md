@@ -5,11 +5,11 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M1: methods + measurements**. M1-1 and M1-2 are done (`938caa7`, CI green on
-  3 OS × 2 Pythons). No spec is approved; next is `/spec M1-3` (BM25).
-- Works: first stages `dense`, `lexical`, `hybrid` (dense + 0.3·lexical), each alone or
-  `> maxsim@N`. All 7 SciFact golden tests match smve-lab to 4 decimals (43 s with the data).
-- Nothing is broken. 258 passed, 7 golden skip without `LATERANK_GOLDEN_DIR`.
+- Milestone **M1: methods + measurements**. M1-1, M1-2 done. **M1-3 (BM25) approved and built**,
+  uncommitted until the owner commits; 6/7 acceptance tests ticked, AT6 (CI on 3 OS) waits for a push.
+- Works: first stages `dense`, `lexical`, `hybrid`, `bm25`, each alone or `> maxsim@N`. All 9
+  SciFact golden tests pass (about 50 s with the data); bm25 needs the exported texts (see Log).
+- Nothing is broken. 281 passed, 9 golden skip without `LATERANK_GOLDEN_DIR`.
 
 ## M0 checklist
 
@@ -22,7 +22,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 - [x] 1. Index + pipeline, dense first (`dense > maxsim@100` = 0.6966)
 - [x] 2. Lexical + hybrid (`hybrid > maxsim@100` = 0.6977)
-- [ ] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086)
+- [ ] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086): built, waiting for CI and `/spec M1-3 done`
 - [ ] 4. SMVE (band [0.537, 0.572])
 - [ ] 5. MUVERA
 - [ ] 6. Encoders + presets
@@ -39,9 +39,34 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `storage.py` (save/load embeddings) | `storage/{arrays,manifest,docs,segment}.py` | new index format: manifest + segment folders, atomic writes, `allow_pickle=False`, no duplicate `.npz` copy |
 | `metrics.py` (nDCG, Recall) | `kernels/metrics.py` | pandas dropped; `mean_metric` replaces `evaluate_run`; P/MRR/MAP wait for M2 |
 | `scripts/evaluate_bgem3_single_vector.py` (lexical, dense + 0.3·lexical) | `components/{lexical,hybrid}.py` | scipy sparse product → postings scored by `kernels/inverted.py`; hybrid stores nothing and reuses the dense and lexical stages |
+| `bm25.py` (`tokenize`, `BM25`) | `components/{bm25,stopwords}.py` | stores raw counts (tf postings + sorted terms), weights computed at open in smve-lab's float32 order (bit-identical); sklearn stopwords copied (no sklearn dependency); vocab sorted, not insertion order |
 | `scripts/compare_first_stages.py` (rerank the top depth with MaxSim) | `components/maxsim.py`, `orchestration/pipeline.py` | a `Pipeline` object + string grammar; ties go to the lower global row (smve-lab kept candidate order) |
 
 ## Log
+
+### 2026-10-11 (M1-3: BM25)
+- **Done**: researcher report (bm25s, Lucene, Tantivy). Drafted, approved and built M1-3:
+  `components/{bm25,stopwords}.py` (new), `Encoded.text`, `Index.create(bm25=True)`,
+  `scripts/export_golden_texts.py` (run once in smve-lab; wrote `scifact_bgem3/{docs,queries}_texts.json`
+  into its git-ignored artifacts), golden `bm25` 0.68999 / 0.92489 and `bm25 > maxsim@100`
+  0.70864 / 0.92489. Reviewer: "merge" with 4 small fixes, all applied (spec Changes).
+- **Decisions**: segments store raw tf postings + sorted terms (`"\n"`-joined uint8); df,
+  lengths, N, avg length derived at open, so 0.2 can add segments (Lucene/Tantivy do the same).
+  Weights follow smve-lab's float32 order: bit-identical on all 445,237 SciFact postings.
+  sklearn's 318 stopwords copied with BSD-3 notice (no sklearn dep). Unknown query words dropped.
+  `bm25` built only with `bm25=True` (presets in M1-6 turn it on). Counts built with integers.
+- **Shortcuts with a ceiling** (`# ponytail:`): `BM25Stage` computes every weight at open and
+  holds them in RAM (O(nnz); SciFact ~2 MB). Upgrade: weight only the touched postings per query
+  when open time or RAM on a big corpus asks for it.
+- **Surprises**: smve-lab's tokenizer also drops stopwords and stems (the brief said regex only).
+  bm25 nDCG@10 is 0.68999 vs smve-lab's 0.68956: ranking smve-lab's own scores with laterank's
+  `top_k` also gives 0.68999, so it's tie order in one query's top 10, not scoring. My first
+  golden "texts optional" fix still crashed the non-bm25 cases; caught by running without texts.
+- **Next**: owner commits and pushes; when CI is green on all 6 jobs, tick AT6 and run
+  `/spec M1-3 done`. Then `/spec M1-4` (SMVE, band [0.537, 0.572] for `balanced` alone, ±0.01
+  around 0.6898 with `> maxsim@100`): start by reading smve-lab's `smve.py` call sites and
+  laterank's `kernels/smve.py`, and decide how the anchor matrix is stored or regenerated
+  (building 1024 × 131,072 anchors takes ~4.5 s, so avoid it on every `open`).
 
 ### 2026-10-11 (M1-2: lexical + hybrid)
 - **Done**: closed M1-1 (`0b3a7cc`, CI green). Drafted, approved and built spec M1-2:

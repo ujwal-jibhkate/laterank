@@ -45,8 +45,8 @@ def scifact_qrels() -> dict[str, dict[str, int]]:
     return qrels
 
 
-def _side(folder: Path, side: str) -> tuple[dict, list[str]]:
-    """One side ("docs" or "queries") of smve-lab's embedding layout."""
+def _side(folder: Path, side: str) -> tuple[dict, list[str], list[str] | None]:
+    """One side ("docs" or "queries") of smve-lab's layout, plus its raw texts if exported."""
     ids_path = folder / f"{side}_ids.json"
     if not ids_path.is_file():
         pytest.fail(f"{ids_path} is missing: is LATERANK_GOLDEN_DIR smve-lab's embeddings folder?")
@@ -61,15 +61,17 @@ def _side(folder: Path, side: str) -> tuple[dict, list[str]]:
             "sparse_weights",
         )
     }
-    return arrays, json.loads(ids_path.read_text(encoding="utf-8"))
+    texts_path = folder / f"{side}_texts.json"  # only the bm25 tests need it
+    texts = json.loads(texts_path.read_text(encoding="utf-8")) if texts_path.is_file() else None
+    return arrays, json.loads(ids_path.read_text(encoding="utf-8")), texts
 
 
 @pytest.fixture(scope="session")
 def scifact(golden_dir, scifact_qrels) -> SimpleNamespace:
     folder = golden_dir / "scifact_bgem3"
     qrels = scifact_qrels
-    queries, all_query_ids = _side(folder, "queries")
-    docs, doc_ids = _side(folder, "docs")
+    queries, all_query_ids, all_query_texts = _side(folder, "queries")
+    docs, doc_ids, doc_texts = _side(folder, "docs")
     query_ids = list(qrels)  # only judged queries can be scored
     row = {qid: i for i, qid in enumerate(all_query_ids)}
     rows = [row[q] for q in query_ids]
@@ -88,4 +90,7 @@ def scifact(golden_dir, scifact_qrels) -> SimpleNamespace:
         d_dense=docs["dense"],
         q_lexical=[(q_ids[q_ptr[r] : q_ptr[r + 1]], q_w[q_ptr[r] : q_ptr[r + 1]]) for r in rows],
         d_lexical=sp.csr_matrix((d_w, d_ids, d_ptr), shape=(len(doc_ids), VOCAB)),
+        # the strings smve-lab's BM25 tokenized; None until scripts/export_golden_texts.py ran
+        q_texts=None if all_query_texts is None else [all_query_texts[r] for r in rows],
+        d_texts=doc_texts,
     )

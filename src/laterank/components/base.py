@@ -19,8 +19,11 @@ class Encoded:
     tokens: np.ndarray  # (t, dim) float, t >= 1
     dense: np.ndarray | None = None  # (d,) float
     lexical: tuple[np.ndarray, np.ndarray] | None = None  # (terms (m,) int, weights (m,) float)
+    text: str | None = None  # the query's raw text, for stages that read words (bm25)
 
     def __post_init__(self) -> None:
+        if self.text is not None and not isinstance(self.text, str):
+            raise ValueError(f"text must be a str, got {type(self.text).__name__}")
         t = np.asarray(self.tokens)
         if t.ndim != 2 or len(t) == 0 or not np.issubdtype(t.dtype, np.floating):
             raise ValueError(

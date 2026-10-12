@@ -20,6 +20,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from laterank.components.base import Encoded
+from laterank.components.bm25 import INDPTR, K1, TF, TOKENIZER, B, BM25Stage
 from laterank.components.dense import VECTORS, DenseStage
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import WEIGHTS, LexicalStage
@@ -29,7 +30,8 @@ from laterank.orchestration.pipeline import Pipeline, parse_pipeline
 from laterank.storage.manifest import EncoderInfo, Manifest, write_manifest
 from laterank.storage.segment import Segment, open_index, write_segment
 
-STORED_STAGES = {"dense": DenseStage, "lexical": LexicalStage}  # manifest "type" -> class
+# manifest "type" -> class
+STORED_STAGES = {"dense": DenseStage, "lexical": LexicalStage, "bm25": BM25Stage}
 FIRST_STAGE_TYPES = {*STORED_STAGES, "hybrid"}  # hybrid is built from dense + lexical
 RERANKERS = {"maxsim": MaxSimReranker}
 
@@ -103,6 +105,7 @@ class Index:
         encoder: EncoderInfo,
         dense: np.ndarray | None = None,
         lexical: sp.spmatrix | sp.sparray | None = None,
+        bm25: bool = False,
         pipeline: str = "dense > maxsim@100",
     ) -> Index:
         """Write a new index folder at `path` and open it.
@@ -114,6 +117,7 @@ class Index:
             dense: (n_docs, d) float, one vector per document; builds the `dense` stage.
             lexical: (n_docs, vocab) scipy sparse weights; builds the `lexical` stage. With
                 `dense` too, the `hybrid` stage (dense + 0.3 * lexical) is built as well.
+            bm25: build the `bm25` stage from each document's title and text.
             pipeline: the default pipeline, recorded in the manifest.
 
         Raises:
@@ -162,6 +166,22 @@ class Index:
             stages["lexical"] = {"type": "lexical", "vocab": int(lexical.shape[1])}
         if dense is not None and lexical is not None:
             stages["hybrid"] = {"type": "hybrid", "alpha": HYBRID_ALPHA}
+        if bm25:
+            if not all(isinstance(d, Mapping) for d in docs):
+                raise ValueError("every document must be a mapping like {'id': ..., 'text': ...}")
+            texts = [f"{d.get('title') or ''}\n{d.get('text') or ''}" for d in docs]
+            counts = BM25Stage.arrays(texts)
+            if len(counts[TF]) == 0:
+                raise ValueError("bm25: no document has a word to index (all empty or stop words)")
+            arrays |= counts
+            vocab = len(counts[INDPTR]) - 1
+            stages["bm25"] = {
+                "type": "bm25",
+                "tokenizer": TOKENIZER,
+                "k1": K1,
+                "b": B,
+                "vocab": vocab,
+            }
         p = parse_pipeline(pipeline)
         _check_pipeline(p, stages)
         existed = path.exists()
