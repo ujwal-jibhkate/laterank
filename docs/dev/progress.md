@@ -5,11 +5,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M0: foundations** is complete: checkpoints 1–4 done, all pushed, CI green on
-  ubuntu/macos/windows × py3.12/3.13 (199 passed, 2 golden tests skip without data).
-- Golden harness works: SciFact exhaustive and dense match smve-lab to 5 decimals.
-- Next milestone: **M1, methods + measurements**. No spec is approved; M1-1 is not drafted yet.
-- Nothing is broken. Known ceilings: the two `# ponytail:` notes listed in the 2026-10-11 entry.
+- Milestone **M1: methods + measurements**. Checkpoint **M1-1** (Index + pipeline, dense first)
+  is built and reviewed (`merge`), uncommitted at the time of writing; 8/9 ATs ticked, AT8 waits
+  for CI on 3 OS after the owner pushes.
+- Works: `Index.create/open/search` on precomputed vectors, pipeline strings like
+  `dense > maxsim@100`, golden SciFact `dense > maxsim@100` = 0.69658 / 0.897 (smve-lab 0.6966 / 0.8970).
+- Nothing is broken. 243 passed, 3 golden skip without `LATERANK_GOLDEN_DIR` (3/3 pass with it, 35 s).
 
 ## M0 checklist
 
@@ -17,6 +18,15 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 2. Kernels: MaxSim, top-k, CSC scoring, SMVE encode, portable SplitMix64 anchors + SHA-256, metrics
 - [x] 3. Storage: manifest.json (atomic write), segments, `.npy` with mmap and no pickle, docs.jsonl + offsets
 - [x] 4. Golden harness: `LATERANK_GOLDEN_DIR`, SciFact qrels fixture, exhaustive 0.6991 and dense 0.6542
+
+## M1 checklist
+
+- [ ] 1. Index + pipeline, dense first (`dense > maxsim@100` = 0.6966): built, waiting for CI + `done`
+- [ ] 2. Lexical + hybrid (`hybrid > maxsim@100` = 0.6977)
+- [ ] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086)
+- [ ] 4. SMVE (band [0.537, 0.572])
+- [ ] 5. MUVERA
+- [ ] 6. Encoders + presets
 
 ## Ported from smve-lab
 
@@ -29,8 +39,32 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `smve.make_anchors` (torch.Generator) | `kernels/rng.py` | new: SplitMix64 + Box–Muller with polynomial log/sin/cos, bit-identical on every platform; `anchor_sha256` |
 | `storage.py` (save/load embeddings) | `storage/{arrays,manifest,docs,segment}.py` | new index format: manifest + segment folders, atomic writes, `allow_pickle=False`, no duplicate `.npz` copy |
 | `metrics.py` (nDCG, Recall) | `kernels/metrics.py` | pandas dropped; `mean_metric` replaces `evaluate_run`; P/MRR/MAP wait for M2 |
+| `scripts/compare_first_stages.py` (rerank the top depth with MaxSim) | `components/maxsim.py`, `orchestration/pipeline.py` | a `Pipeline` object + string grammar; ties go to the lower global row (smve-lab kept candidate order) |
 
 ## Log
+
+### 2026-10-11 (M1-1: Index + pipeline, dense first)
+- **Done**: researcher report (PyTerrier, PyLate, RAGatouille, bm25s, sentence-transformers: none
+  saves a pipeline; only PyTerrier has a pipeline object). Drafted, approved and built spec M1-1:
+  `errors.py` (+`IndexExistsError`, `PipelineSyntaxError`), `components/{base,dense,maxsim}.py`,
+  `orchestration/{pipeline,index}.py`, tests in `tests/{components,orchestration}/`, golden
+  `test_dense_then_maxsim_at_100`. Reviewer: round 1 "fix first" (6 boundary gaps, all fixed),
+  round 2 "merge" (2 low notes, fixed). Spec Changes lists every fix.
+- **Decisions**: pipeline stays a string in the manifest, parsed into a frozen `Pipeline` that
+  validates itself (a hand-made one obeys the grammar too). Two Protocols, `FirstStage` and
+  `Reranker`, so `maxsim > dense` fails at parse/check time. k > last depth is an error.
+  Rerankers have no manifest `stages` entry (the token store belongs to the index). The golden
+  test builds components from smve-lab's memmaps (no 3.8 GB copy); `Index` is tested on synthetic data.
+- **Shortcuts with a ceiling** (`# ponytail:`): `Index.open` reads single-segment indexes only
+  (upgrade: global-row map across segments when `add()` lands in 0.2). `Index.create` cleanup
+  can leave files on Windows if memmaps are still open (only if `open` rejects what `create`
+  wrote; upgrade: close arrays before deleting).
+- **Surprises**: the tie rule change (global row vs candidate order) didn't move the golden
+  value at all (0.69658 vs 0.6966). `/spec` can't be started by Claude; the owner types it.
+- **Next**: owner commits and pushes; when CI is green on all 6 jobs, tick AT8 and run
+  `/spec M1-1 done`. Then `/spec M1-2` (lexical + hybrid; golden `hybrid > maxsim@100` = 0.6977,
+  `hybrid` alone 0.6842): first decide where `Encoded.lexical` lives and how lexical weights are
+  stored (postings via `kernels/inverted.py::to_postings`).
 
 ### 2026-10-11 (wrap-up: M0 closed, M1 order agreed)
 - **Done**: closed M0-3 and M0-4 after CI confirmed them (`d3afe51`). The spec hook now also asks

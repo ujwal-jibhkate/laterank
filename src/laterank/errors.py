@@ -12,3 +12,11 @@ class LaterankError(Exception):
 class IndexFormatError(LaterankError):
     """An index folder can't be read: a missing or corrupt file, pickled data, or a manifest this
     release doesn't understand."""
+
+
+class IndexExistsError(LaterankError, FileExistsError):
+    """Creating an index in a folder that already holds files."""
+
+
+class PipelineSyntaxError(LaterankError, ValueError):
+    """A pipeline string doesn't parse, or a rerank depth is larger than the one before it."""
