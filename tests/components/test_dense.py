@@ -41,3 +41,15 @@ def test_bad_inputs():
         stage.search(_query(None), 1)
     with pytest.raises(ValueError, match="expected"):
         stage.search(_query(np.ones(5, dtype=np.float32)), 1)
+
+
+def test_a_non_finite_dense_query_is_refused():
+    for bad in ([1.0, np.nan], [np.inf, 0.0]):
+        with pytest.raises(ValueError, match="finite"):
+            _query(np.array(bad))
+
+
+def test_scores_cover_every_document():
+    vectors = np.array([[1.0, 0], [0, 2.0], [1.0, 1.0]], dtype=np.float32)
+    got = DenseStage(vectors).scores(_query(np.array([1.0, 1.0], dtype=np.float32)))
+    assert got.dtype == np.float32 and got.tolist() == [1.0, 2.0, 2.0]

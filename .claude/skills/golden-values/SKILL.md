@@ -38,6 +38,7 @@ when it's unset.
 | `exhaustive` | 0.9203 | 0.2914 | 0.9666 |
 | `bm25` | 0.9249 | 0.2572 | 0.9730 |
 | `dense` | 0.8970 | 0.2825 | 0.9815 |
+| `lexical` | 0.8980 | 0.2335 | 0.9303 |
 | `hybrid` | 0.9237 | 0.2886 | 0.9879 |
 
 ## SMVE and MUVERA: a band, not a point

@@ -31,15 +31,25 @@ class DenseStage:
         return {VECTORS: DenseStage(np.asarray(vectors)).vectors.astype(np.float32)}
 
     @classmethod
-    def from_segment(cls, seg: Segment) -> DenseStage:
-        return cls(seg.array(VECTORS))
+    def from_segment(cls, seg: Segment, cfg: dict, n_docs: int) -> DenseStage:
+        """Open the stored vectors; ValueError unless they are (n_docs, cfg["dim"])."""
+        stage = cls(seg.array(VECTORS))
+        if stage.vectors.shape != (n_docs, cfg["dim"]):
+            raise ValueError(
+                f"dense vectors are {stage.vectors.shape}, expected ({n_docs}, {cfg['dim']})"
+            )
+        return stage
 
-    def search(self, q: Encoded, k: int) -> Candidates:
+    def scores(self, q: Encoded) -> np.ndarray:
+        """(n_docs,) float32 inner products with the query's dense vector."""
         d = self.vectors.shape[1]
         if q.dense is None:
             raise ValueError("the dense stage needs a query with a dense vector (Encoded.dense)")
         if q.dense.shape != (d,):
             raise ValueError(f"the query's dense vector has shape {q.dense.shape}, expected ({d},)")
-        scores = np.asarray(self.vectors @ q.dense.astype(np.float32), dtype=np.float32)
+        return np.asarray(self.vectors @ q.dense.astype(np.float32), dtype=np.float32)
+
+    def search(self, q: Encoded, k: int) -> Candidates:
+        scores = self.scores(q)
         rows = top_k(scores, k)
         return Candidates(rows, scores[rows])

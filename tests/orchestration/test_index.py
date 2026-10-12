@@ -5,9 +5,12 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+import scipy.sparse as sp
 
 from laterank.components.base import Encoded
 from laterank.components.dense import DenseStage
+from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
+from laterank.components.lexical import LexicalStage
 from laterank.components.maxsim import MaxSimReranker
 from laterank.errors import IndexExistsError, IndexFormatError
 from laterank.orchestration.index import Index
@@ -155,3 +158,120 @@ def test_open_turns_a_malformed_index_into_index_format_error(tmp_path):
     np.save(path / "seg-000001" / "tokens" / "flat.npy", np.zeros(5), allow_pickle=False)
     with pytest.raises(IndexFormatError):
         Index.open(path)
+
+
+VOCAB = 30
+
+
+def _with_lexical():
+    docs, tokens, dense, q = _data()
+    rng = np.random.default_rng(1)
+    lexical = sp.random(
+        len(docs), VOCAB, density=0.2, format="csr", dtype=np.float32, random_state=rng
+    )
+    q = Encoded(q.tokens, q.dense, ([2, 7, 11, 2], [1.0, 0.5, 0.25, 0.75]))
+    return docs, tokens, dense, lexical, q
+
+
+def test_lexical_and_hybrid_match_the_pipeline(tmp_path):
+    docs, (flat, offsets), dense, lexical, q = _with_lexical()
+    Index.create(
+        tmp_path / "ix", docs, (flat, offsets), encoder=ENCODER, dense=dense, lexical=lexical
+    )
+    index = Index.open(tmp_path / "ix")
+    on_disk = json.loads((tmp_path / "ix" / "manifest.json").read_text())
+    assert on_disk["stages"] == {
+        "dense": {"type": "dense", "dim": 4},
+        "lexical": {"type": "lexical", "vocab": VOCAB},
+        "hybrid": {"type": "hybrid", "alpha": 0.3},
+    }
+    lex = LexicalStage(*LexicalStage.arrays(lexical).values(), n_docs=len(docs))
+    stages = {
+        "lexical": lex,
+        "hybrid": HybridStage(DenseStage(dense), lex, HYBRID_ALPHA),
+        "maxsim": MaxSimReranker(flat, offsets),
+    }
+    for spec, k in (("lexical", 10), ("hybrid", 10), ("hybrid > maxsim@20", 5)):
+        want = parse_pipeline(spec).run(stages, q, k)
+        hits = index.search(q, k, pipeline=spec)
+        assert [h.id for h in hits] == [f"d{r}" for r in want.rows]
+        assert [h.score for h in hits] == want.scores.tolist()
+
+
+def test_any_scipy_sparse_format_works(tmp_path):
+    docs, tokens, _, lexical, q = _with_lexical()
+    want = None
+    for fmt in ("csr", "csc", "coo", "lil", "dok"):
+        ix = Index.create(
+            tmp_path / fmt,
+            docs,
+            tokens,
+            encoder=ENCODER,
+            lexical=lexical.asformat(fmt),
+            pipeline="lexical",
+        )
+        got = ix.search(q, 10)
+        want = want or got
+        assert got == want
+
+
+def test_lexical_only_has_no_hybrid(tmp_path):
+    docs, tokens, _, lexical, q = _with_lexical()
+    index = Index.create(
+        tmp_path / "ix",
+        docs,
+        tokens,
+        encoder=ENCODER,
+        lexical=lexical,
+        pipeline="lexical > maxsim@100",
+    )
+    with pytest.raises(ValueError, match=r"first stages \['lexical'\]"):
+        index.search(q, pipeline="hybrid")
+
+
+def test_open_refuses_damaged_lexical_and_hybrid_stages(tmp_path):
+    docs, tokens, dense, lexical, _ = _with_lexical()
+    path = tmp_path / "ix"
+    Index.create(path, docs, tokens, encoder=ENCODER, dense=dense, lexical=lexical)
+    manifest = read_manifest(path)
+    rows = path / "seg-000001" / "lexical" / "rows.npy"
+    good = np.load(rows, allow_pickle=False)
+
+    np.save(
+        rows, np.where(good == good.max(), len(docs), good).astype(np.int32), allow_pickle=False
+    )
+    with pytest.raises(IndexFormatError, match="outside the 40 documents"):
+        Index.open(path)
+    np.save(rows, good, allow_pickle=False)
+
+    for stages in (
+        {**manifest.stages, "lexical": {"type": "lexical", "vocab": VOCAB + 1}},
+        {"dense": manifest.stages["dense"], "hybrid": manifest.stages["hybrid"]},
+        {"lexical": manifest.stages["lexical"], "hybrid": manifest.stages["hybrid"]},
+        *(
+            {**manifest.stages, "hybrid": {"type": "hybrid", "alpha": a}}
+            for a in (None, True, "0.3")
+        ),
+    ):
+        write_manifest(
+            path,
+            replace(
+                manifest,
+                stages=stages,
+                default_pipeline="hybrid" if "dense" not in stages else "dense",
+            ),
+        )
+        with pytest.raises(IndexFormatError, match="malformed"):
+            Index.open(path)
+
+
+def test_create_refuses_non_finite_weights(tmp_path):
+    docs, tokens, dense, lexical, _ = _with_lexical()
+    bad_lexical = lexical.copy()
+    bad_lexical.data[0] = np.nan
+    bad_dense = dense.copy()
+    bad_dense[3, 1] = np.inf
+    for kwargs in (dict(lexical=bad_lexical, dense=dense), dict(lexical=lexical, dense=bad_dense)):
+        with pytest.raises(ValueError, match="finite"):
+            Index.create(tmp_path / "ix", docs, tokens, encoder=ENCODER, **kwargs)
+        assert not (tmp_path / "ix").exists()

@@ -11,11 +11,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import scipy.sparse as sp
 
 from laterank.kernels.maxsim import subset_ragged
 from laterank.storage.arrays import load_array
 
 QRELS = Path(__file__).parent / "data" / "scifact-test-qrels.tsv"
+VOCAB = 250_002  # BGE-M3's XLM-RoBERTa vocabulary, as in smve-lab
 
 
 @pytest.fixture(scope="session")
@@ -50,7 +52,14 @@ def _side(folder: Path, side: str) -> tuple[dict, list[str]]:
         pytest.fail(f"{ids_path} is missing: is LATERANK_GOLDEN_DIR smve-lab's embeddings folder?")
     arrays = {
         key: load_array(folder / f"{side}_{key}.npy")  # memory-mapped, allow_pickle=False
-        for key in ("colbert_flat", "colbert_offsets", "dense")
+        for key in (
+            "colbert_flat",
+            "colbert_offsets",
+            "dense",
+            "sparse_indptr",  # BGE-M3 lexical weights, CSR-style (one row per text)
+            "sparse_ids",
+            "sparse_weights",
+        )
     }
     return arrays, json.loads(ids_path.read_text(encoding="utf-8"))
 
@@ -65,6 +74,8 @@ def scifact(golden_dir, scifact_qrels) -> SimpleNamespace:
     row = {qid: i for i, qid in enumerate(all_query_ids)}
     rows = [row[q] for q in query_ids]
     q_flat, q_offsets = subset_ragged(queries["colbert_flat"], queries["colbert_offsets"], rows)
+    q_ptr, q_ids, q_w = (queries[k] for k in ("sparse_indptr", "sparse_ids", "sparse_weights"))
+    d_ptr, d_ids, d_w = (docs[k] for k in ("sparse_indptr", "sparse_ids", "sparse_weights"))
     return SimpleNamespace(
         qrels=qrels,
         query_ids=query_ids,
@@ -75,4 +86,6 @@ def scifact(golden_dir, scifact_qrels) -> SimpleNamespace:
         d_offsets=docs["colbert_offsets"],
         q_dense=queries["dense"][rows],
         d_dense=docs["dense"],
+        q_lexical=[(q_ids[q_ptr[r] : q_ptr[r + 1]], q_w[q_ptr[r] : q_ptr[r + 1]]) for r in rows],
+        d_lexical=sp.csr_matrix((d_w, d_ids, d_ptr), shape=(len(doc_ids), VOCAB)),
     )

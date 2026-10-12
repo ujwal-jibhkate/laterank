@@ -5,11 +5,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M1: methods + measurements**. Checkpoint **M1-1** (Index + pipeline, dense first)
-  is done (`b07cc49`, CI green on 3 OS × 2 Pythons). No spec is approved; next is `/spec M1-2`.
-- Works: `Index.create/open/search` on precomputed vectors, pipeline strings like
-  `dense > maxsim@100`, golden SciFact `dense > maxsim@100` = 0.69658 / 0.897 (smve-lab 0.6966 / 0.8970).
-- Nothing is broken. 243 passed, 3 golden skip without `LATERANK_GOLDEN_DIR` (3/3 pass with it, 35 s).
+- Milestone **M1: methods + measurements**. M1-1 done (`b07cc49`). **M1-2** (lexical + hybrid)
+  is built and reviewed (`merge`, round 3), uncommitted at the time of writing; 7/8 ATs ticked,
+  AT7 waits for CI on 3 OS after the owner pushes.
+- Works: first stages `dense`, `lexical`, `hybrid` (dense + 0.3·lexical), each alone or
+  `> maxsim@N`. All 7 SciFact golden tests match smve-lab to 4 decimals (43 s with the data).
+- Nothing is broken. 258 passed, 7 golden skip without `LATERANK_GOLDEN_DIR`.
 
 ## M0 checklist
 
@@ -21,7 +22,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## M1 checklist
 
 - [x] 1. Index + pipeline, dense first (`dense > maxsim@100` = 0.6966)
-- [ ] 2. Lexical + hybrid (`hybrid > maxsim@100` = 0.6977)
+- [ ] 2. Lexical + hybrid (`hybrid > maxsim@100` = 0.6977): built, waiting for CI + `done`
 - [ ] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086)
 - [ ] 4. SMVE (band [0.537, 0.572])
 - [ ] 5. MUVERA
@@ -38,9 +39,33 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `smve.make_anchors` (torch.Generator) | `kernels/rng.py` | new: SplitMix64 + Box–Muller with polynomial log/sin/cos, bit-identical on every platform; `anchor_sha256` |
 | `storage.py` (save/load embeddings) | `storage/{arrays,manifest,docs,segment}.py` | new index format: manifest + segment folders, atomic writes, `allow_pickle=False`, no duplicate `.npz` copy |
 | `metrics.py` (nDCG, Recall) | `kernels/metrics.py` | pandas dropped; `mean_metric` replaces `evaluate_run`; P/MRR/MAP wait for M2 |
+| `scripts/evaluate_bgem3_single_vector.py` (lexical, dense + 0.3·lexical) | `components/{lexical,hybrid}.py` | scipy sparse product → postings scored by `kernels/inverted.py`; hybrid stores nothing and reuses the dense and lexical stages |
 | `scripts/compare_first_stages.py` (rerank the top depth with MaxSim) | `components/maxsim.py`, `orchestration/pipeline.py` | a `Pipeline` object + string grammar; ties go to the lower global row (smve-lab kept candidate order) |
 
 ## Log
+
+### 2026-10-11 (M1-2: lexical + hybrid)
+- **Done**: closed M1-1 (`0b3a7cc`, CI green). Drafted, approved and built spec M1-2:
+  `components/{lexical,hybrid}.py` (new), `Encoded.lexical`, `DenseStage.scores` and
+  `from_segment(seg, cfg, n_docs)`, `Index.create(lexical=...)`, golden fixture reads smve-lab's
+  sparse arrays, golden tests parametrized over 5 pipelines. Reviewer: round 1 "fix first"
+  (unchecked `alpha`, postings dtypes, NaN weights, loose `Encoded.lexical`), round 2 "fix
+  first" (my NaN fix broke `lil`/`dok` input), round 3 "merge". Then `Encoded.dense` refuses
+  NaN/inf too (owner OK). `golden-values` skill gained the `lexical` Recall@100 row.
+- **Decisions**: lexical weights stored as postings (CSC). `hybrid` stores nothing, is built
+  whenever dense + lexical are given, alpha fixed at 0.3 (paper value, smve-lab's golden) and
+  recorded in the manifest; it finds its partners by the stage names `dense`/`lexical`. Every
+  stage has `scores(q)` beside `search`. Stored stages check their own arrays in `from_segment`.
+  Non-finite weights/vectors are refused at `create` and in queries (a NaN silently empties results).
+- **Shortcuts with a ceiling**: none added today (the 3 existing `# ponytail:` notes stand).
+- **Surprises**: lexical ties at score 0 didn't move any golden value. A validation fix can
+  break valid inputs: reading `.data` before conversion crashed on `lil`/`dok` matrices; the
+  new all-formats test pins it. `ruff format` also reformats Python blocks inside spec Markdown.
+- **Next**: owner commits and pushes; when CI is green, tick AT7 and run `/spec M1-2 done`.
+  Then `/spec M1-3` (BM25: 0.6896 / 0.9249, `bm25 > maxsim@100` 0.7086). Start by reading
+  smve-lab's `src/smve_lab/bm25.py` and its ASCII tokenizer, and decide how corpus-wide stats
+  (IDF, average doc length) are stored so new segments can update them (design §6: store raw
+  term counts, compute BM25 weights at query time).
 
 ### 2026-10-11 (M1-1: Index + pipeline, dense first)
 - **Done**: researcher report (PyTerrier, PyLate, RAGatouille, bm25s, sentence-transformers: none

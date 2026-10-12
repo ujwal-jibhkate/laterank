@@ -14,10 +14,11 @@ import numpy as np
 
 @dataclass(frozen=True)
 class Encoded:
-    """One encoded query: its token vectors, and a single dense vector if the encoder has one."""
+    """One encoded query: its token vectors, plus the single-vector heads the encoder has."""
 
     tokens: np.ndarray  # (t, dim) float, t >= 1
     dense: np.ndarray | None = None  # (d,) float
+    lexical: tuple[np.ndarray, np.ndarray] | None = None  # (terms (m,) int, weights (m,) float)
 
     def __post_init__(self) -> None:
         t = np.asarray(self.tokens)
@@ -27,9 +28,30 @@ class Encoded:
             )
         if self.dense is not None:
             d = np.asarray(self.dense)
-            if d.ndim != 1 or not np.issubdtype(d.dtype, np.floating):
-                raise ValueError(f"dense must be a 1-D float array, got {d.shape} {d.dtype}")
+            if d.ndim != 1 or not np.issubdtype(d.dtype, np.floating) or not np.isfinite(d).all():
+                raise ValueError(
+                    f"dense must be a 1-D array of finite floats, got {d.shape} {d.dtype}"
+                )
             object.__setattr__(self, "dense", d)
+        if self.lexical is not None:
+            try:
+                terms, weights = (np.asarray(a) for a in self.lexical)
+                ok = (
+                    terms.ndim == 1
+                    and terms.shape == weights.shape
+                    and (terms.size == 0 or terms.dtype.kind in "iu")  # [] is float64
+                    and weights.dtype.kind in "iuf"
+                    and bool(np.isfinite(weights).all())
+                )
+            except (TypeError, ValueError):  # not a pair, or ragged
+                ok = False
+            if not ok:
+                raise ValueError(
+                    "lexical must be (terms, weights): two 1-D arrays of the same length, int "
+                    f"term ids and finite real weights, got {self.lexical!r}"[:300]
+                )
+            lexical = (terms.astype(np.int64), weights.astype(np.float32))
+            object.__setattr__(self, "lexical", lexical)
         object.__setattr__(self, "tokens", t)  # lists become arrays
 
 
