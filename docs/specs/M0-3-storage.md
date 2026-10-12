@@ -1,7 +1,7 @@
 ---
 id: M0-3
 title: Storage
-status: approved
+status: done
 approved: 2026-10-03
 ---
 
@@ -137,7 +137,7 @@ def open_index(index_dir: Path) -> tuple[Manifest, list[Segment]]
 - [x] AT8: `write_segment` → `open_segment` round-trips; a failure mid-write leaves no
   `seg-XXXXXX/` folder; `open_index` ignores unlisted segment folders and raises
   `IndexFormatError` for a listed one that is missing.
-- [ ] AT9: `tests/test_layers.py` also checks that `errors.py` and `_version.py` import only the
+- [x] AT9: `tests/test_layers.py` also checks that `errors.py` and `_version.py` import only the
   stdlib; `grep -rn "import torch" src/laterank/storage` finds nothing; `uv run pytest -q` and
   `uv run ruff check .` pass on all three CI operating systems.
 - [x] AT10: the reviewer agent's verdict is `merge`.

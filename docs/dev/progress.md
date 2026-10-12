@@ -5,17 +5,16 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M0: foundations**. Checkpoints 1 (skeleton) and 2 (kernels) are done.
-- Checkpoint 3 (storage, spec M0-3 approved): built, and all 5 review defects fixed (2026-10-11).
-  197 tests pass, **uncommitted until the owner says so**. AT1–AT8 and AT10 ticked (third
-  review: merge once the huge-int fix landed, which it did); AT9 waits for the first CI run.
-- Checkpoint 4 (golden harness) not started. Nothing has been pushed yet, so CI has never run.
+- Milestone **M0: foundations**. Checkpoints 1 (skeleton), 2 (kernels) and 3 (storage) are done.
+- CI ran for the first time on 2026-10-11 (run 38185959601): 197 passed on ubuntu/macos/windows ×
+  py3.12/3.13, so M0-2's cross-platform RNG claim and M0-3's AT9 now hold everywhere.
+- Checkpoint 4 (golden harness): spec M0-4 approved and built; waiting on reviewer + CI.
 
 ## M0 checklist
 
 - [x] 1. Skeleton: uv + hatchling/hatch-vcs, Apache-2.0, extras declared, CI (3 OS × py3.12/3.13)
 - [x] 2. Kernels: MaxSim, top-k, CSC scoring, SMVE encode, portable SplitMix64 anchors + SHA-256, metrics
-- [ ] 3. Storage: manifest.json (atomic write), segments, `.npy` with mmap and no pickle, docs.jsonl + offsets
+- [x] 3. Storage: manifest.json (atomic write), segments, `.npy` with mmap and no pickle, docs.jsonl + offsets
 - [ ] 4. Golden harness: `LATERANK_GOLDEN_DIR`, SciFact qrels fixture, exhaustive 0.6991 and dense 0.6542
 
 ## Ported from smve-lab
@@ -32,6 +31,13 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Log
 
+### 2026-10-11 (golden harness)
+- **Done**: M0-4 approved with option (a) (commit the CC BY-SA 4.0 qrels with a README) and built:
+  `tests/golden/{conftest.py,test_scifact.py,data/}`. With smve-lab's embeddings, SciFact exhaustive
+  0.69912 / 0.92033 and dense 0.65418 / 0.89700 (nDCG@10 / Recall@100) match smve-lab to 5 decimals.
+  `pytest -m slow` takes 27 s (exhaustive MaxSim 26.4 s in numpy vs 27.6 s in smve-lab's torch).
+- **Next**: reviewer (AT7); commit `Spec: M0-4`; push so CI confirms AT1; `/spec M0-4 done`.
+
 ### 2026-10-11 (storage review fixes)
 - **Done**: fixed all 5 review defects plus the 'also proposed' items (case-colliding array
   paths, storage may import only kernels/storage/errors/_version, `DocStore` docstring,
@@ -43,7 +49,10 @@ This file is the project's memory between Claude Code sessions. `/start-session`
   in JSON. Deleted `Segment.__repr__`, `_fsync_tree`, one trivial test. Deferred (ponytail note in
   `segment.py::_check_relpath`): case-only folder clashes, Windows-reserved names, file/folder
   path clashes.
-- **Next**: owner OKs the commits; then push (owner only) so CI runs AT9 on three OSes.
+- **Then**: committed (`0a07721` ponytail, `841e9fc` storage), owner pushed, CI green on all 6
+  jobs (197 passed, no skips). M0-3 marked done. Drafted `docs/specs/M0-4-golden-harness.md`.
+- **Next**: owner reviews M0-4 (open question: committing the CC BY-SA 4.0 SciFact qrels
+  fixture), then `/spec M0-4 approve`.
 
 ### 2026-10-05 (storage build and review)
 - **Done**: built M0-3 tasks 1–4: `errors.py`, `_version.py`, `storage/{arrays,manifest,docs,
