@@ -5,8 +5,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M1: methods + measurements**. M1-1, M1-2 done. **M1-3 (BM25) approved and built**,
-  uncommitted until the owner commits; 6/7 acceptance tests ticked, AT6 (CI on 3 OS) waits for a push.
+- Milestone **M1: methods + measurements**. M1-1, M1-2, M1-3 done (`5e6c05d`, CI green on
+  3 OS × 2 Pythons). No spec is approved; next is `/spec M1-4` (SMVE).
 - Works: first stages `dense`, `lexical`, `hybrid`, `bm25`, each alone or `> maxsim@N`. All 9
   SciFact golden tests pass (about 50 s with the data); bm25 needs the exported texts (see Log).
 - Nothing is broken. 281 passed, 9 golden skip without `LATERANK_GOLDEN_DIR`.
@@ -22,7 +22,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 - [x] 1. Index + pipeline, dense first (`dense > maxsim@100` = 0.6966)
 - [x] 2. Lexical + hybrid (`hybrid > maxsim@100` = 0.6977)
-- [ ] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086): built, waiting for CI and `/spec M1-3 done`
+- [x] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086)
 - [ ] 4. SMVE (band [0.537, 0.572])
 - [ ] 5. MUVERA
 - [ ] 6. Encoders + presets
