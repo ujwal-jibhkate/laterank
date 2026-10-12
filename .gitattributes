@@ -1,0 +1,2 @@
+# Byte-exact test data: its SHA-256 is checked, so git must never rewrite line endings.
+tests/golden/data/*.tsv -text

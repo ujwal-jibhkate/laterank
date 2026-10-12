@@ -14,8 +14,9 @@ acceptance test passes). This script enforces the rules in three places:
   commit-msg FILE    git commit-msg hook. It rejects Claude attribution, and requires a
                      "Spec: <id>" trailer on commits that touch src/ or tests/.
 
-Edits made through shell commands bypass the Claude Code hook. The commit-msg hook is the
-backstop for that path.
+Shell commands get a text check only: one that mentions docs/specs and "status: approved" or
+"status: done" forces the same permission prompt. Other shell edits bypass the Claude Code hook,
+and the commit-msg hook is the backstop for src/ and tests/.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ SPEC_DIR = Path("docs/specs")
 
 FRONT_MATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 STATUS_LINE = re.compile(r"^status:\s*(\S+)", re.M)
+SHELL_STATUS = re.compile(r"status:\s*(approved|done)")
 TRAILER = re.compile(r"^Spec:[ \t]*(\S+)(.*)$", re.M)
 ATTRIBUTION = re.compile(r"co-authored-by:.*(claude|anthropic)|generated with.*claude", re.I)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -142,6 +144,17 @@ def decide(decision: str, reason: str) -> None:
 
 def claude_hook(event: dict) -> None:
     tool_input = event.get("tool_input") or {}
+    command = tool_input.get("command")
+    if command is not None:  # Bash: a script or sed could set a spec's status
+        # ponytail: text match, so it can miss indirect edits; a PostToolUse diff of spec
+        # statuses would catch every path if this ever proves too weak.
+        if "docs/specs" in command and (m := SHELL_STATUS.search(command)):
+            decide(
+                "ask",
+                f"This shell command may set a spec's status to '{m.group(1)}'. Only the owner "
+                "approves specs and marks them done. Allow it only if you asked for this.",
+            )
+        return
     file_path = tool_input.get("file_path")
     if not file_path:
         return

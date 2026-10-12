@@ -151,7 +151,7 @@ scripts/specs.py         the program that enforces the spec rules
 scripts/git-hooks/       git hook: Spec trailer required, no Claude attribution
 .claude/skills/          /start-session, /wrap-up, /spec, /split-work, /explain, port-module, golden-values
 .claude/agents/          implementer, reviewer, researcher
-.claude/settings.json    the spec hook (blocks code edits without an approved spec) + the ponytail plugin
+.claude/settings.json    the spec hook (blocks code edits without an approved spec; asks before any status change, shell commands included) + the ponytail plugin
 ```
 
 ---

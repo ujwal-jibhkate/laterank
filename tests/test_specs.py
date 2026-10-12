@@ -126,6 +126,19 @@ def test_hook_allows_ordinary_spec_edits(repo, monkeypatch, capsys):
     assert run_hook({"tool_name": "Edit", "tool_input": edit}, monkeypatch, capsys) is None
 
 
+def test_hook_asks_before_a_shell_command_sets_a_status(repo, monkeypatch, capsys):
+    sed = {"command": "sed -i 's/status: draft/status: done/' docs/specs/M9-1-x.md"}
+    assert (
+        run_hook({"tool_name": "Bash", "tool_input": sed}, monkeypatch, capsys)[
+            "permissionDecision"
+        ]
+        == "ask"
+    )
+    for harmless in ("python3 scripts/specs.py check", "grep -n status: docs/specs/M9-1-x.md"):
+        event = {"tool_name": "Bash", "tool_input": {"command": harmless}}
+        assert run_hook(event, monkeypatch, capsys) is None
+
+
 # --- git commit-msg hook --------------------------------------------------------------------
 
 
