@@ -1,7 +1,7 @@
 ---
 id: M1-1
 title: Index and pipeline, dense first
-status: approved
+status: done
 approved: 2026-10-11
 ---
 
@@ -162,7 +162,7 @@ my_index/
 - [x] AT7: golden. SciFact `dense > maxsim@100` gives nDCG@10 = 0.6966 ± 0.002
   (`results/cross_dataset/summary.md`, line 39) and Recall@100 = 0.8970 ± 0.002. The rerank
   reorders the same 100 documents, so its Recall@100 equals dense's.
-- [ ] AT8: `tests/test_layers.py` covers the new `components/` and `orchestration/` folders, and
+- [x] AT8: `tests/test_layers.py` covers the new `components/` and `orchestration/` folders, and
   `uv run pytest -q` and `uv run ruff check .` pass on all three CI operating systems.
 - [x] AT9: the reviewer agent's verdict is `merge`.
 

@@ -6,8 +6,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## Current state
 
 - Milestone **M1: methods + measurements**. Checkpoint **M1-1** (Index + pipeline, dense first)
-  is built and reviewed (`merge`), uncommitted at the time of writing; 8/9 ATs ticked, AT8 waits
-  for CI on 3 OS after the owner pushes.
+  is done (`b07cc49`, CI green on 3 OS × 2 Pythons). No spec is approved; next is `/spec M1-2`.
 - Works: `Index.create/open/search` on precomputed vectors, pipeline strings like
   `dense > maxsim@100`, golden SciFact `dense > maxsim@100` = 0.69658 / 0.897 (smve-lab 0.6966 / 0.8970).
 - Nothing is broken. 243 passed, 3 golden skip without `LATERANK_GOLDEN_DIR` (3/3 pass with it, 35 s).
@@ -21,7 +20,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## M1 checklist
 
-- [ ] 1. Index + pipeline, dense first (`dense > maxsim@100` = 0.6966): built, waiting for CI + `done`
+- [x] 1. Index + pipeline, dense first (`dense > maxsim@100` = 0.6966)
 - [ ] 2. Lexical + hybrid (`hybrid > maxsim@100` = 0.6977)
 - [ ] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086)
 - [ ] 4. SMVE (band [0.537, 0.572])
