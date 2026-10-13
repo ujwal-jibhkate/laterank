@@ -5,8 +5,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M1: methods + measurements**. M1-1..M1-3 done. **M1-4 (SMVE) approved and built**;
-  6/7 acceptance tests ticked, AT6 (CI on 3 OS) waits for the owner's commit + push.
+- Milestone **M1: methods + measurements**. M1-1..M1-4 done (`198728b`, CI green on
+  3 OS × 2 Pythons). No spec is approved; next is `/spec M1-5` (MUVERA).
 - Works: first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, each alone or `> maxsim@N`.
   All 11 SciFact golden tests pass (~6.5 min; `-k "not smve"` ~1 min).
 - Nothing is broken. 292 passed, 11 golden skip without `LATERANK_GOLDEN_DIR`.
@@ -23,7 +23,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 1. Index + pipeline, dense first (`dense > maxsim@100` = 0.6966)
 - [x] 2. Lexical + hybrid (`hybrid > maxsim@100` = 0.6977)
 - [x] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086)
-- [ ] 4. SMVE (band [0.537, 0.572]): built, waiting for CI and `/spec M1-4 done`
+- [x] 4. SMVE (band [0.537, 0.572])
 - [ ] 5. MUVERA
 - [ ] 6. Encoders + presets
 
@@ -63,8 +63,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - **Surprises**: `argpartition` was 89% of encode time and single-threaded (SciFact ~20 min at
   first). My first threading capped itself at 4 threads (256-row floor). `argpartition(P, w-k)`
   ranks NaN as largest, unlike the old `-P` form. laterank's Recall@100 is ~0.01 below smve-lab's.
-- **Next**: owner commits and pushes; when CI is green, tick AT6 and run `/spec M1-4 done`. Then
-  `/spec M1-5` (MUVERA). Start by reading smve-lab's `src/smve_lab/muvera.py` and its 54 runs in
+- **Then**: committed `198728b` (`Spec: M1-4`), CI green on all 6 jobs, M1-4 marked done.
+- **Next**: `/spec M1-5` (MUVERA). Start by reading smve-lab's `src/smve_lab/muvera.py` and its 54 runs in
   `results/scifact_bgem3/muvera/` (one seed each). golden-values has no MUVERA band yet, so first
   pick the setting with the owner and decide how to set a band.
 

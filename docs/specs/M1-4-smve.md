@@ -1,7 +1,7 @@
 ---
 id: M1-4
 title: SMVE first stage
-status: approved
+status: done
 approved: 2026-10-12
 ---
 
@@ -123,7 +123,7 @@ seg-000001/smve/center.npy    (d,) float32               only when center is tru
   nDCG@10 within 0.6898 ± 0.01.
 - [x] AT5: seeds 0, 1, 2 measured once (both pipelines, nDCG@10 and Recall@100) and recorded
   in the golden-values skill; every value lands in the AT4 bands. SciFact encode time recorded.
-- [ ] AT6: `uv run pytest -q` and `uv run ruff check .` pass on all three CI operating systems.
+- [x] AT6: `uv run pytest -q` and `uv run ruff check .` pass on all three CI operating systems.
 - [x] AT7: the reviewer agent's verdict is `merge`.
 
 ## Tasks
