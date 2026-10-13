@@ -25,13 +25,19 @@ from laterank.components.dense import VECTORS, DenseStage
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import WEIGHTS, LexicalStage
 from laterank.components.maxsim import TOKENS, MaxSimReranker
+from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.errors import IndexExistsError, IndexFormatError
 from laterank.orchestration.pipeline import Pipeline, parse_pipeline
 from laterank.storage.manifest import EncoderInfo, Manifest, write_manifest
 from laterank.storage.segment import Segment, open_index, write_segment
 
 # manifest "type" -> class
-STORED_STAGES = {"dense": DenseStage, "lexical": LexicalStage, "bm25": BM25Stage}
+STORED_STAGES = {
+    "dense": DenseStage,
+    "lexical": LexicalStage,
+    "bm25": BM25Stage,
+    "smve": SMVEStage,
+}
 FIRST_STAGE_TYPES = {*STORED_STAGES, "hybrid"}  # hybrid is built from dense + lexical
 RERANKERS = {"maxsim": MaxSimReranker}
 
@@ -106,6 +112,7 @@ class Index:
         dense: np.ndarray | None = None,
         lexical: sp.spmatrix | sp.sparray | None = None,
         bm25: bool = False,
+        smve: bool = False,
         pipeline: str = "dense > maxsim@100",
     ) -> Index:
         """Write a new index folder at `path` and open it.
@@ -118,6 +125,8 @@ class Index:
             lexical: (n_docs, vocab) scipy sparse weights; builds the `lexical` stage. With
                 `dense` too, the `hybrid` stage (dense + 0.3 * lexical) is built as well.
             bm25: build the `bm25` stage from each document's title and text.
+            smve: build the `smve` stage from the token vectors (setting SMVE_BALANCED; about
+                5 minutes for SciFact's 1.86M tokens).
             pipeline: the default pipeline, recorded in the manifest.
 
         Raises:
@@ -182,6 +191,14 @@ class Index:
                 "b": B,
                 "vocab": vocab,
             }
+        if smve:
+            # min/max carry NaN and show +-inf without a (T, d) temporary; checked before an
+            # encode that can take minutes
+            if not (np.isfinite(flat.min()) and np.isfinite(flat.max())):
+                raise ValueError("smve: token vectors must be finite (no NaN or inf)")
+            smve_arrays, sha = SMVEStage.arrays(flat, offsets, SMVE_BALANCED)
+            arrays |= smve_arrays
+            stages["smve"] = {"type": "smve", **SMVE_BALANCED, "anchor_sha256": sha}
         p = parse_pipeline(pipeline)
         _check_pipeline(p, stages)
         existed = path.exists()

@@ -37,12 +37,20 @@ portable generator, so numbers match smve-lab statistically, not bit for bit.
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 import scipy.sparse as sp
 from tqdm import tqdm
 
 from laterank.kernels.maxsim import _batches
 from laterank.kernels.rng import sample_indices
+
+# argpartition runs on one core but releases the GIL, so row slices can run side by side.
+# ponytail: SciFact docs take ~5.2 min with threads (torch: 3.3 min); a group-max prefilter
+# (top-k of per-group maxima bounds the k-th value) would cut the partition work if needed
+_WORKERS = os.cpu_count() or 1
 
 
 def _center(X: np.ndarray, center: np.ndarray | None) -> np.ndarray:
@@ -61,7 +69,8 @@ def topk_blocks(P: np.ndarray, k: int, reps: int = 1) -> tuple[np.ndarray, np.nd
 
     Returns:
         values (T, reps*k) and GLOBAL column indices (T, reps*k) int64, in no particular order
-        within a block (pooling doesn't care about order).
+        within a block (pooling doesn't care about order). Rows are split across threads.
+        A NaN counts as the largest value, so callers must pass finite projections.
     """
     T, W = P.shape
     if W % reps:
@@ -70,9 +79,20 @@ def topk_blocks(P: np.ndarray, k: int, reps: int = 1) -> tuple[np.ndarray, np.nd
     if not 1 <= k <= w:
         raise ValueError(f"need 1 <= k <= anchors per block ({w}), got k={k}")
     blocks = P.reshape(T, reps, w)
-    idx = np.argpartition(-blocks, k - 1, axis=-1)[..., :k]  # (T, reps, k), local
-    values = np.take_along_axis(blocks, idx, axis=-1)
-    idx = idx + (np.arange(reps) * w)[None, :, None]  # local -> global column
+    values = np.empty((T, reps, k), dtype=P.dtype)
+    idx = np.empty((T, reps, k), dtype=np.int64)
+
+    def part(rows: slice) -> None:
+        i = np.argpartition(blocks[rows], w - k, axis=-1)[..., w - k :]  # top k, local
+        idx[rows] = i
+        values[rows] = np.take_along_axis(blocks[rows], i, axis=-1)
+
+    step = max(32, -(-T // _WORKERS))  # one slice per core, never tiny ones
+    # A pool per call, not a module-level one: a fork()ed child inherits a shared pool without
+    # its threads and would hang on first use.
+    with ThreadPoolExecutor(_WORKERS) as pool:
+        list(pool.map(part, (slice(a, a + step) for a in range(0, T, step))))  # re-raises
+    idx += (np.arange(reps) * w)[None, :, None]  # local -> global column
     return values.reshape(T, reps * k), idx.reshape(T, reps * k)
 
 

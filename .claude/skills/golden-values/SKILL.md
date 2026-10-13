@@ -48,9 +48,23 @@ MUVERA scores won't match smve-lab digit for digit. smve-lab saw SMVE nDCG@10 mo
 across seeds.
 - SMVE `balanced` (w=65,536, k=32, centered), SciFact nDCG@10 alone: must land in
   **[0.537, 0.572]** (smve-lab's fixed setting scored 0.5471 with seed 0).
-- With `> maxsim@100` on top, smve-lab's fixed setting scored 0.6898. The proposed tolerance is
-  ±0.01, because the rerank absorbs most first-stage noise. This is provisional: confirm it
-  across seeds in M1 before relying on it.
+- With `> maxsim@100` on top, smve-lab's fixed setting scored 0.6898 (seed 0). Tolerance
+  **±0.01**, i.e. [0.6798, 0.6998]. Confirmed in M1-4 across laterank seeds 0–2 (table below).
+  smve-lab's seeds 0–2 alone: 0.5471 / 0.5618 / 0.5599 (`results/scifact_bgem3/smve/
+  w65536_k32_center_seed*/summary.json`); only seed 0 has a rerank number.
+
+laterank SMVE `balanced` on SciFact, measured 2026-10-12 (M1-4), BGE-M3 embeddings from smve-lab:
+
+| seed | `smve` nDCG@10 | `smve` Recall@100 | `smve > maxsim@100` nDCG@10 |
+|---|---|---|---|
+| 0 | 0.5502 | 0.8497 | 0.6913 |
+| 1 | 0.5469 | 0.8430 | 0.6864 |
+| 2 | 0.5572 | 0.8547 | 0.6960 |
+
+The rerank spread across seeds (0.0096) is about the ±0.01 tolerance, so don't tighten it.
+laterank's Recall@100 runs ~0.01 below smve-lab's (0.857–0.862). Building the doc vectors takes
+~5.2 min on the owner's Mac (10 cores; 8.3 min before the review fixed the slice size);
+smve-lab's torch took ~3.3 min. Slicing doesn't change results, so the table above stands.
 
 ## Conditions behind the numbers
 

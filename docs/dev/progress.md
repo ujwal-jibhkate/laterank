@@ -5,11 +5,11 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M1: methods + measurements**. M1-1, M1-2, M1-3 done (`5e6c05d`, CI green on
-  3 OS × 2 Pythons). No spec is approved; next is `/spec M1-4` (SMVE).
-- Works: first stages `dense`, `lexical`, `hybrid`, `bm25`, each alone or `> maxsim@N`. All 9
-  SciFact golden tests pass (about 50 s with the data); bm25 needs the exported texts (see Log).
-- Nothing is broken. 281 passed, 9 golden skip without `LATERANK_GOLDEN_DIR`.
+- Milestone **M1: methods + measurements**. M1-1..M1-3 done. **M1-4 (SMVE) approved and built**;
+  6/7 acceptance tests ticked, AT6 (CI on 3 OS) waits for the owner's commit + push.
+- Works: first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, each alone or `> maxsim@N`.
+  All 11 SciFact golden tests pass (~6.5 min; `-k "not smve"` ~1 min).
+- Nothing is broken. 292 passed, 11 golden skip without `LATERANK_GOLDEN_DIR`.
 
 ## M0 checklist
 
@@ -23,7 +23,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 1. Index + pipeline, dense first (`dense > maxsim@100` = 0.6966)
 - [x] 2. Lexical + hybrid (`hybrid > maxsim@100` = 0.6977)
 - [x] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086)
-- [ ] 4. SMVE (band [0.537, 0.572])
+- [ ] 4. SMVE (band [0.537, 0.572]): built, waiting for CI and `/spec M1-4 done`
 - [ ] 5. MUVERA
 - [ ] 6. Encoders + presets
 
@@ -40,9 +40,33 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `metrics.py` (nDCG, Recall) | `kernels/metrics.py` | pandas dropped; `mean_metric` replaces `evaluate_run`; P/MRR/MAP wait for M2 |
 | `scripts/evaluate_bgem3_single_vector.py` (lexical, dense + 0.3·lexical) | `components/{lexical,hybrid}.py` | scipy sparse product → postings scored by `kernels/inverted.py`; hybrid stores nothing and reuses the dense and lexical stages |
 | `bm25.py` (`tokenize`, `BM25`) | `components/{bm25,stopwords}.py` | stores raw counts (tf postings + sorted terms), weights computed at open in smve-lab's float32 order (bit-identical); sklearn stopwords copied (no sklearn dependency); vocab sorted, not insertion order |
+| `scripts/evaluate_smve.py` (setting w65536_k32_center) | `components/smve.py` | anchors regenerated at open and hash-checked (not stored, 256 MB); doc vectors as postings; `topk_blocks` threaded (argpartition was 89% of encode time) |
 | `scripts/compare_first_stages.py` (rerank the top depth with MaxSim) | `components/maxsim.py`, `orchestration/pipeline.py` | a `Pipeline` object + string grammar; ties go to the lower global row (smve-lab kept candidate order) |
 
 ## Log
+
+### 2026-10-13 (M1-4: SMVE)
+- **Done**: drafted, approved (10-12) and built M1-4: threaded `kernels/smve.py::topk_blocks`,
+  `components/smve.py` (new, `SMVEStage`, `SMVE_BALANCED`), `Index.create(smve=True)`, golden
+  `test_smve_pipeline` with its own fixture. Seeds 0/1/2: `smve` 0.5502/0.5469/0.5572, `smve >
+  maxsim@100` 0.6913/0.6864/0.6960, all in band; table in the golden-values skill. Reviewer:
+  round 1 "fix first" (fork hang, 4-thread cap, no NaN check), round 2 "fix first" (NaN check
+  made a 1.8 GB temporary), round 3 "merge". Commands added to CLAUDE.md and START_HERE.md.
+- **Decisions**: anchors regenerated at open and SHA-256-checked (storing them = 256 MB, more than
+  the index). Settings fixed to `balanced`, all in the manifest. Postings validated by an inner
+  `LexicalStage`. Thread pool per call (fork-safe), one slice per core. SMVE golden stays under
+  `-m slow`; skip with `-k "not smve"` (owner left the pick to Claude). ±0.01 rerank tolerance
+  confirmed across seeds (spread 0.0096, so don't tighten it).
+- **Shortcuts with a ceiling** (`# ponytail:`): SciFact build ~5.2 min vs torch's 3.3; upgrade:
+  group-max prefilter for top-k. Anchors rebuilt on every open (~2.2 s); upgrade: build on first
+  query or cache.
+- **Surprises**: `argpartition` was 89% of encode time and single-threaded (SciFact ~20 min at
+  first). My first threading capped itself at 4 threads (256-row floor). `argpartition(P, w-k)`
+  ranks NaN as largest, unlike the old `-P` form. laterank's Recall@100 is ~0.01 below smve-lab's.
+- **Next**: owner commits and pushes; when CI is green, tick AT6 and run `/spec M1-4 done`. Then
+  `/spec M1-5` (MUVERA). Start by reading smve-lab's `src/smve_lab/muvera.py` and its 54 runs in
+  `results/scifact_bgem3/muvera/` (one seed each). golden-values has no MUVERA band yet, so first
+  pick the setting with the owner and decide how to set a band.
 
 ### 2026-10-11 (M1-3: BM25)
 - **Done**: researcher report (bm25s, Lucene, Tantivy). Drafted, approved and built M1-3:

@@ -13,7 +13,9 @@ from laterank.components.dense import DenseStage
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import LexicalStage
 from laterank.components.maxsim import MaxSimReranker
+from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.errors import IndexExistsError, IndexFormatError
+from laterank.kernels.rng import make_anchors
 from laterank.orchestration.index import Index
 from laterank.orchestration.pipeline import parse_pipeline
 from laterank.storage.manifest import EncoderInfo, read_manifest, write_manifest
@@ -354,3 +356,49 @@ def test_open_refuses_a_damaged_bm25_stage(tmp_path):
     (path / "manifest.json").write_text(json.dumps(raw))
     with pytest.raises(IndexFormatError):
         Index.open(path)
+
+
+def test_smve_matches_the_pipeline(tmp_path):
+    docs, (flat, offsets), dense, q = _data()
+    path = tmp_path / "ix"
+    index = Index.create(path, docs, (flat, offsets), encoder=ENCODER, dense=dense, smve=True)
+    a, sha = SMVEStage.arrays(flat, offsets, SMVE_BALANCED)
+    on_disk = json.loads((path / "manifest.json").read_text())
+    assert on_disk["stages"]["smve"] == {"type": "smve", **SMVE_BALANCED, "anchor_sha256": sha}
+    stored = sorted(p.name for p in (path / "seg-000001" / "smve").iterdir())
+    assert stored == ["center.npy", "indptr.npy", "rows.npy", "weights.npy"]
+
+    B = make_anchors(DIM, SMVE_BALANCED["w"], SMVE_BALANCED["seed"])
+    postings = [a[f"smve/{x}.npy"] for x in ("indptr", "rows", "weights")]
+    smve = SMVEStage(*postings, len(docs), B, 32, 1, a["smve/center.npy"])
+    stages = {"smve": smve, "maxsim": MaxSimReranker(flat, offsets)}
+    for spec, k in (("smve", 10), ("smve > maxsim@20", 5)):
+        want = parse_pipeline(spec).run(stages, q, k)
+        hits = index.search(q, k, pipeline=spec)
+        assert [h.id for h in hits] == [f"d{r}" for r in want.rows]
+        assert [h.score for h in hits] == want.scores.tolist()
+
+
+def test_open_refuses_a_damaged_smve_stage(tmp_path):
+    docs, tokens, dense, _ = _data()
+    path = tmp_path / "ix"
+    Index.create(path, docs, tokens, encoder=ENCODER, dense=dense, smve=True)
+    manifest = read_manifest(path)
+    good = manifest.stages["smve"]
+    for bad in ({"anchor_sha256": "0" * 64}, {"w": 32768}, {"seed": 1}, {"k": "32"}):
+        write_manifest(path, replace(manifest, stages={**manifest.stages, "smve": good | bad}))
+        with pytest.raises(IndexFormatError, match="malformed"):
+            Index.open(path)
+    write_manifest(path, manifest)
+    np.save(path / "seg-000001" / "smve" / "center.npy", np.zeros(DIM - 1, np.float32))
+    with pytest.raises(IndexFormatError, match="malformed"):
+        Index.open(path)
+
+
+def test_smve_refuses_non_finite_tokens(tmp_path):
+    docs, (flat, offsets), _, _ = _data()
+    flat = flat.copy()
+    flat[5, 2] = np.nan
+    with pytest.raises(ValueError, match="finite"):
+        Index.create(tmp_path / "ix", docs, (flat, offsets), encoder=ENCODER, smve=True)
+    assert not (tmp_path / "ix").exists()

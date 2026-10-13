@@ -145,6 +145,18 @@ def test_topk_blocks_rejects_bad_shapes():
     assert values.shape == idx.shape == (2, 10)
 
 
+def test_topk_blocks_across_threads_matches_argsort():
+    rng = np.random.default_rng(3)
+    P = rng.standard_normal((2001, 64)).astype(np.float32)  # several slices, a short last one
+    for reps, k in ((1, 5), (4, 3)):
+        values, idx = topk_blocks(P, k, reps)
+        w = 64 // reps
+        local = np.argsort(-P.reshape(2001, reps, w), axis=-1)[..., :k]
+        want = local + np.arange(reps)[:, None] * w  # local -> global column
+        assert np.array_equal(np.sort(idx, axis=1), np.sort(want.reshape(2001, -1), axis=1))
+        assert np.array_equal(values, np.take_along_axis(P, idx, axis=1))
+
+
 def test_token_mean_is_seeded_and_exact_when_sample_covers_everything():
     rng = np.random.default_rng(5)
     flat = rng.standard_normal((50, 4)).astype(np.float16)

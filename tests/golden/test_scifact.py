@@ -15,8 +15,10 @@ from laterank.components.dense import DenseStage
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import LexicalStage
 from laterank.components.maxsim import MaxSimReranker
+from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.kernels.maxsim import maxsim_scores
 from laterank.kernels.metrics import mean_metric, ndcg_at_k, recall_at_k
+from laterank.kernels.rng import make_anchors
 from laterank.kernels.topk import top_k
 from laterank.orchestration.pipeline import parse_pipeline
 
@@ -90,19 +92,46 @@ PIPELINES = [
 @pytest.mark.slow
 @pytest.mark.parametrize(("spec", "ndcg10", "recall100"), PIPELINES)
 def test_pipeline(scifact, stages, spec, ndcg10, recall100):
-    pipeline, off = parse_pipeline(spec), scifact.q_offsets
-    if pipeline.first == "bm25" and scifact.q_texts is None:
+    if spec.startswith("bm25") and scifact.q_texts is None:
         pytest.fail(
             "the SciFact texts are missing: run scripts/export_golden_texts.py once inside "
             "smve-lab (see its docstring)"
         )
+    _check_run(_run(scifact, stages, spec), scifact, ndcg10, recall100)
+
+
+def _run(data, stages: dict, spec: str) -> dict[str, list[str]]:
+    pipeline, off = parse_pipeline(spec), data.q_offsets
     run = {}
-    for i, qid in enumerate(scifact.query_ids):
+    for i, qid in enumerate(data.query_ids):
         q = Encoded(
-            scifact.q_flat[off[i] : off[i + 1]],
-            scifact.q_dense[i],
-            scifact.q_lexical[i],
-            None if scifact.q_texts is None else scifact.q_texts[i],
+            data.q_flat[off[i] : off[i + 1]],
+            data.q_dense[i],
+            data.q_lexical[i],
+            None if data.q_texts is None else data.q_texts[i],
         )
-        run[qid] = [scifact.doc_ids[r] for r in pipeline.run(stages, q, 100).rows]
-    _check_run(run, scifact, ndcg10, recall100)
+        run[qid] = [data.doc_ids[r] for r in pipeline.run(stages, q, 100).rows]
+    return run
+
+
+@pytest.fixture(scope="module")
+def smve_stage(scifact) -> SMVEStage:
+    """SMVE balanced over every SciFact document: ~5 minutes, so only SMVE tests ask for it."""
+    a, _ = SMVEStage.arrays(scifact.d_flat, scifact.d_offsets, SMVE_BALANCED)
+    B = make_anchors(scifact.d_flat.shape[1], SMVE_BALANCED["w"], SMVE_BALANCED["seed"])
+    postings = (a[f"smve/{x}.npy"] for x in ("indptr", "rows", "weights"))
+    k, reps = SMVE_BALANCED["k"], SMVE_BALANCED["reps"]
+    return SMVEStage(*postings, len(scifact.doc_ids), B, k, reps, a["smve/center.npy"])
+
+
+# SMVE's anchors come from laterank's own generator, so only a band can match smve-lab
+# (golden-values skill): alone within its seed range, reranked within 0.6898 +- 0.01.
+SMVE_BANDS = [("smve", 0.537, 0.572), ("smve > maxsim@100", 0.6798, 0.6998)]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(("spec", "low", "high"), SMVE_BANDS)
+def test_smve_pipeline(scifact, stages, smve_stage, spec, low, high):
+    run = _run(scifact, {**stages, "smve": smve_stage}, spec)
+    ndcg10 = mean_metric(run, scifact.qrels, ndcg_at_k, 10)
+    assert low <= ndcg10 <= high, f"nDCG@10 = {ndcg10}"
