@@ -42,8 +42,32 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bm25.py` (`tokenize`, `BM25`) | `components/{bm25,stopwords}.py` | stores raw counts (tf postings + sorted terms), weights computed at open in smve-lab's float32 order (bit-identical); sklearn stopwords copied (no sklearn dependency); vocab sorted, not insertion order |
 | `scripts/evaluate_smve.py` (setting w65536_k32_center) | `components/smve.py` | anchors regenerated at open and hash-checked (not stored, 256 MB); doc vectors as postings; `topk_blocks` threaded (argpartition was 89% of encode time) |
 | `scripts/compare_first_stages.py` (rerank the top depth with MaxSim) | `components/maxsim.py`, `orchestration/pipeline.py` | a `Pipeline` object + string grammar; ties go to the lower global row (smve-lab kept candidate order) |
+| `muvera.py` (`MuveraFDE`) | `kernels/muvera.py`, `components/muvera.py` | torch → numpy (`np.bincount` per projected column replaces `index_add_`); planes from the portable RNG (`make_planes`, new `rng.random_signs`) and **stored** in the index (6 MB), not regenerated; `center` and `fill_empty=False` dropped; an empty item gives zeros (smve-lab crashed); `fde_encode` agrees with smve-lab's `encode` to 1.9e-6 |
 
 ## Log
+
+### 2026-11-03 (M1-5: MUVERA)
+- **Done**: drafted, approved and built M1-5: `kernels/muvera.py` (`make_planes`, `fde_encode`),
+  `kernels/rng.py::random_signs`, `components/muvera.py` (`MuveraStage`, `MUVERA_DEFAULT`),
+  `Index.create(muvera=True)`, golden `test_muvera_pipeline` over seeds 0-2. Reviewer: "merge"
+  (low findings fixed). Commits `ea95aa5` (code) and `51a429d` (close), CI green, spec done.
+  SciFact seeds 0/1/2: `muvera` 0.5335/0.5378/0.5118, `muvera > maxsim@100` 0.6895/0.6870/0.6904,
+  Recall@100 0.842-0.856; table in the golden-values skill.
+- **Decisions**: setting r40_k4_p32 uncentered (owner's pick: 425 MB, ~10 ms in smve-lab). Planes
+  stored, not regenerated (6 MB vs SMVE's 256 MB anchors). Alone band widened to [0.500, 0.580]
+  after seed 2 (owner OK); reranked band stays 0.6888 ± 0.01 (spread only 0.003). `fdes` finite
+  check is at build (`arrays`), not on every `open` (would read 425 MB). Golden test runs 3 seeds.
+- **Shortcuts with a ceiling**: the build holds the whole `fdes` matrix in RAM (425 MB on SciFact,
+  8 GB at 100k docs); upgrade: write chunks into a `.npy` memmap. The spec promised a
+  `# ponytail:` comment for it, but none is in the code (no spec was approved to add one).
+- **Surprises**: seed 2 fell below my first band (0.5118 vs 0.533): MUVERA's alone spread (0.026)
+  is 2.6x SMVE's. Build takes 22-25 s, not the ~10 s I estimated from synthetic data (torch:
+  13.7 s). The reviewer found my spec paired two settings' centering numbers; fixed from `runs.csv`.
+- **Next**: `/spec M1-6` (encoders + presets, the last M1 item). Start with the `researcher` agent
+  on how sentence-transformers, PyLate and FlagEmbedding load BGE-M3 and ColBERT models, and pick
+  with the owner how a preset maps to first stage + settings (`smve(preset=...)`, `muvera(...)`).
+  Also decide with the owner: add the missing `# ponytail:` comment (commit `Spec: none`), and
+  commit or ignore the Wheelhouse files (`.gitignore`, `wheelhouse.json`, `scripts/git-hooks/post-*`).
 
 ### 2026-10-13 (M1-4: SMVE)
 - **Done**: drafted, approved (10-12) and built M1-4: threaded `kernels/smve.py::topk_blocks`,
