@@ -1,7 +1,7 @@
 ---
 id: M1-5
 title: MUVERA first stage
-status: approved
+status: done
 approved: 2026-11-03
 ---
 
@@ -122,29 +122,29 @@ table, not tuned code; upgrade: threads over chunks, as in M1-4, if SciFact buil
 
 ## Acceptance tests
 
-- [ ] AT1: `fde_encode` equals a plain-Python reference (loops over items, reps, buckets) for
+- [x] AT1: `fde_encode` equals a plain-Python reference (loops over items, reps, buckets) for
   queries and documents, with empty buckets filled, `max_tokens` small (chunks of 1 and several
   items give the same result as one chunk), an empty item (all zeros), and `fill_empty` on a
   query. `k_sim` 9 and mismatched shapes raise `ValueError`.
-- [ ] AT2: `random_signs` and `make_planes` return the stated shapes and dtypes, only ±1 (and
+- [x] AT2: `random_signs` and `make_planes` return the stated shapes and dtypes, only ±1 (and
   ±1/√d_proj), the same values on a second call, a stable prefix when `n` grows, and a signs
   stream different from the normals' stream for the same seed.
-- [ ] AT3: `MuveraStage.scores` equals `fde_encode(query) @ fde_encode(docs).T` (rtol 1e-5) on
+- [x] AT3: `MuveraStage.scores` equals `fde_encode(query) @ fde_encode(docs).T` (rtol 1e-5) on
   small random data; `search` breaks ties by lower row; the constructor rejects widths that
   don't agree and non-finite planes; `arrays` rejects encodings that overflow float32.
-- [ ] AT4: `Index.create(muvera=True)` writes the manifest stage and three arrays above;
+- [x] AT4: `Index.create(muvera=True)` writes the manifest stage and three arrays above;
   `search` with `muvera` and with `muvera > maxsim@20` equals `Pipeline.run` on in-memory stages.
   `Index.open` raises `IndexFormatError` for a wrong `reps`, a `hyperplanes.npy` or
   `projection.npy` of the wrong shape, and `fdes.npy` of the wrong row count. NaN tokens are
   refused at `create`.
-- [ ] AT5: golden SciFact, seed 0: `muvera` nDCG@10 in [0.500, 0.580]; `muvera > maxsim@100`
+- [x] AT5: golden SciFact, seed 0: `muvera` nDCG@10 in [0.500, 0.580]; `muvera > maxsim@100`
   nDCG@10 within 0.6888 ± 0.01. (Recall@100 is recorded, not asserted.)
-- [ ] AT6: seeds 0, 1, 2 measured once (both pipelines, nDCG@10 and Recall@100) and recorded in
+- [x] AT6: seeds 0, 1, 2 measured once (both pipelines, nDCG@10 and Recall@100) and recorded in
   the golden-values skill with the SciFact build time. If a seed lands outside the AT5 bands,
   stop and ask the owner; do not widen the band quietly.
-- [ ] AT7: `uv run pytest -q` and `uv run ruff check .` pass on all three CI operating systems;
+- [x] AT7: `uv run pytest -q` and `uv run ruff check .` pass on all three CI operating systems;
   `tests/test_layers.py` still passes (no torch in `kernels/`).
-- [ ] AT8: the reviewer agent's verdict is `merge`.
+- [x] AT8: the reviewer agent's verdict is `merge`.
 
 ## Tasks
 

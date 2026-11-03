@@ -5,11 +5,11 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M1: methods + measurements**. M1-1..M1-4 done (`198728b`, CI green on
-  3 OS × 2 Pythons). No spec is approved; next is `/spec M1-5` (MUVERA).
-- Works: first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, each alone or `> maxsim@N`.
-  All 11 SciFact golden tests pass (~6.5 min; `-k "not smve"` ~1 min).
-- Nothing is broken. 292 passed, 11 golden skip without `LATERANK_GOLDEN_DIR`.
+- Milestone **M1: methods + measurements**. M1-1..M1-5 done (`ea95aa5`, CI green on
+  3 OS × 2 Pythons). No spec is approved; next is `/spec M1-6` (encoders + presets).
+- Works: first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, each alone or `> maxsim@N`.
+  All 17 SciFact golden tests pass (~8.5 min; `-k "not smve and not muvera"` ~1 min).
+- Nothing is broken. 321 passed, 17 golden skip without `LATERANK_GOLDEN_DIR`.
 
 ## M0 checklist
 
@@ -24,7 +24,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 2. Lexical + hybrid (`hybrid > maxsim@100` = 0.6977)
 - [x] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086)
 - [x] 4. SMVE (band [0.537, 0.572])
-- [ ] 5. MUVERA
+- [x] 5. MUVERA (band: alone [0.500, 0.580], `muvera > maxsim@100` 0.6888 ± 0.01)
 - [ ] 6. Encoders + presets
 
 ## Ported from smve-lab
