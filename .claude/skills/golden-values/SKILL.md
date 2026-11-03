@@ -66,6 +66,21 @@ laterank's Recall@100 runs ~0.01 below smve-lab's (0.857–0.862). Building the 
 ~5.2 min on the owner's Mac (10 cores; 8.3 min before the review fixed the slice size);
 smve-lab's torch took ~3.3 min. Slicing doesn't change results, so the table above stands.
 
+MUVERA `r40_k4_p32` (R=40, k_sim=4, d_proj=32, uncentered), SciFact. smve-lab, seed 0
+(`results/scifact_bgem3/muvera/runs.csv`): nDCG@10 0.5530, Recall@100 0.858, `> maxsim@100` 0.6888
+(`first_stage/summary.md`), 425 MB, build 13.7 s. laterank bands: **`muvera` alone [0.500, 0.580]**,
+**`muvera > maxsim@100` 0.6888 ± 0.01**. Measured 2026-11-03 (M1-5), BGE-M3 embeddings from smve-lab:
+
+| seed | `muvera` nDCG@10 | `muvera` Recall@100 | `muvera > maxsim@100` nDCG@10 | build |
+|---|---|---|---|---|
+| 0 | 0.5335 | 0.8423 | 0.6895 | 21.6 s |
+| 1 | 0.5378 | 0.8560 | 0.6870 | 24.5 s |
+| 2 | 0.5118 | 0.8540 | 0.6904 | 25.0 s |
+
+Alone, seeds spread 0.026 (wider than SMVE's 0.010), so the first guess [0.533, 0.573] missed seed 2
+and the owner widened it. Reranked, the spread is only 0.003. The golden test runs all three seeds
+(~2 min). Build takes ~22-25 s on the owner's Mac against torch's 13.7 s.
+
 ## Conditions behind the numbers
 
 - **BM25**: Lucene variant (k1=1.2, b=0.75), using smve-lab's ASCII regex tokenizer and sklearn

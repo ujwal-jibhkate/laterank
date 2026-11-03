@@ -13,6 +13,7 @@ from laterank.components.dense import DenseStage
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import LexicalStage
 from laterank.components.maxsim import MaxSimReranker
+from laterank.components.muvera import MUVERA_DEFAULT, MuveraStage
 from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.errors import IndexExistsError, IndexFormatError
 from laterank.kernels.rng import make_anchors
@@ -401,4 +402,54 @@ def test_smve_refuses_non_finite_tokens(tmp_path):
     flat[5, 2] = np.nan
     with pytest.raises(ValueError, match="finite"):
         Index.create(tmp_path / "ix", docs, (flat, offsets), encoder=ENCODER, smve=True)
+    assert not (tmp_path / "ix").exists()
+
+
+def test_muvera_matches_the_pipeline(tmp_path):
+    docs, (flat, offsets), dense, q = _data()
+    path = tmp_path / "ix"
+    index = Index.create(path, docs, (flat, offsets), encoder=ENCODER, dense=dense, muvera=True)
+    on_disk = json.loads((path / "manifest.json").read_text())
+    assert on_disk["stages"]["muvera"] == {"type": "muvera", **MUVERA_DEFAULT}
+    stored = sorted(p.name for p in (path / "seg-000001" / "muvera").iterdir())
+    assert stored == ["fdes.npy", "hyperplanes.npy", "projection.npy"]
+
+    a = MuveraStage.arrays(flat, offsets, MUVERA_DEFAULT)
+    muvera = MuveraStage(*(a[f"muvera/{x}.npy"] for x in ("fdes", "hyperplanes", "projection")), 4)
+    stages = {"muvera": muvera, "maxsim": MaxSimReranker(flat, offsets)}
+    for spec, k in (("muvera", 10), ("muvera > maxsim@20", 5)):
+        want = parse_pipeline(spec).run(stages, q, k)
+        hits = index.search(q, k, pipeline=spec)
+        assert [h.id for h in hits] == [f"d{r}" for r in want.rows]
+        assert [h.score for h in hits] == want.scores.tolist()
+
+
+def test_open_refuses_a_damaged_muvera_stage(tmp_path):
+    docs, tokens, dense, _ = _data()
+    path = tmp_path / "ix"
+    Index.create(path, docs, tokens, encoder=ENCODER, dense=dense, muvera=True)
+    manifest = read_manifest(path)
+    good = manifest.stages["muvera"]
+    for bad in ({"reps": 20}, {"d_proj": 16}, {"k_sim": 5}, {"seed": "0"}, {"reps": -1}):
+        write_manifest(path, replace(manifest, stages={**manifest.stages, "muvera": good | bad}))
+        with pytest.raises(IndexFormatError, match="malformed"):
+            Index.open(path)
+    write_manifest(path, manifest)
+    folder = path / "seg-000001" / "muvera"
+    for name in ("fdes", "hyperplanes", "projection"):
+        original = np.load(folder / f"{name}.npy", allow_pickle=False)
+        damaged = original[:-1] if name == "fdes" else original[:, :-1]
+        np.save(folder / f"{name}.npy", damaged, allow_pickle=False)
+        with pytest.raises(IndexFormatError, match="malformed"):
+            Index.open(path)
+        np.save(folder / f"{name}.npy", original, allow_pickle=False)
+    Index.open(path)  # the restored folder opens again
+
+
+def test_muvera_refuses_non_finite_tokens(tmp_path):
+    docs, (flat, offsets), _, _ = _data()
+    flat = flat.copy()
+    flat[5, 2] = np.nan
+    with pytest.raises(ValueError, match="muvera: token vectors must be finite"):
+        Index.create(tmp_path / "ix", docs, (flat, offsets), encoder=ENCODER, muvera=True)
     assert not (tmp_path / "ix").exists()

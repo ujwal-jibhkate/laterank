@@ -4,6 +4,7 @@ Expected values: ~/Projects/smve-lab/results/cross_dataset/summary.md (BEIR test
 """
 
 import hashlib
+import time
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,7 @@ from laterank.components.dense import DenseStage
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import LexicalStage
 from laterank.components.maxsim import MaxSimReranker
+from laterank.components.muvera import MUVERA_DEFAULT, MuveraStage
 from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.kernels.maxsim import maxsim_scores
 from laterank.kernels.metrics import mean_metric, ndcg_at_k, recall_at_k
@@ -134,4 +136,34 @@ SMVE_BANDS = [("smve", 0.537, 0.572), ("smve > maxsim@100", 0.6798, 0.6998)]
 def test_smve_pipeline(scifact, stages, smve_stage, spec, low, high):
     run = _run(scifact, {**stages, "smve": smve_stage}, spec)
     ndcg10 = mean_metric(run, scifact.qrels, ndcg_at_k, 10)
+    assert low <= ndcg10 <= high, f"nDCG@10 = {ndcg10}"
+
+
+MUVERA_SEEDS = (0, 1, 2)  # smve-lab has one seed (0); laterank's planes come from its own RNG
+
+
+@pytest.fixture(scope="module", params=MUVERA_SEEDS)
+def muvera_stage(scifact, request) -> MuveraStage:
+    """MUVERA r40_k4_p32 over every SciFact document (~25 s per seed)."""
+    cfg = MUVERA_DEFAULT | {"seed": request.param}
+    start = time.perf_counter()
+    a = MuveraStage.arrays(scifact.d_flat, scifact.d_offsets, cfg)
+    print(f"\nmuvera seed {request.param}: built in {time.perf_counter() - start:.1f} s")
+    return MuveraStage(
+        *(a[f"muvera/{x}.npy"] for x in ("fdes", "hyperplanes", "projection")), cfg["k_sim"]
+    )
+
+
+# Bands, as for SMVE: smve-lab's r40_k4_p32 scored 0.5530 alone and 0.6888 reranked (seed 0).
+# laterank seeds 0-2 gave 0.5118-0.5378 alone and 0.6870-0.6904 reranked (golden-values skill).
+MUVERA_BANDS = [("muvera", 0.500, 0.580), ("muvera > maxsim@100", 0.6788, 0.6988)]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(("spec", "low", "high"), MUVERA_BANDS)
+def test_muvera_pipeline(scifact, stages, muvera_stage, spec, low, high):
+    run = _run(scifact, {**stages, "muvera": muvera_stage}, spec)
+    ndcg10 = mean_metric(run, scifact.qrels, ndcg_at_k, 10)
+    recall100 = mean_metric(run, scifact.qrels, recall_at_k, 100)
+    print(f"\n{spec}: nDCG@10 = {ndcg10:.4f}, Recall@100 = {recall100:.4f}")
     assert low <= ndcg10 <= high, f"nDCG@10 = {ndcg10}"

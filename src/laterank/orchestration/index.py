@@ -25,6 +25,7 @@ from laterank.components.dense import VECTORS, DenseStage
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import WEIGHTS, LexicalStage
 from laterank.components.maxsim import TOKENS, MaxSimReranker
+from laterank.components.muvera import MUVERA_DEFAULT, MuveraStage
 from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.errors import IndexExistsError, IndexFormatError
 from laterank.orchestration.pipeline import Pipeline, parse_pipeline
@@ -37,6 +38,7 @@ STORED_STAGES = {
     "lexical": LexicalStage,
     "bm25": BM25Stage,
     "smve": SMVEStage,
+    "muvera": MuveraStage,
 }
 FIRST_STAGE_TYPES = {*STORED_STAGES, "hybrid"}  # hybrid is built from dense + lexical
 RERANKERS = {"maxsim": MaxSimReranker}
@@ -113,6 +115,7 @@ class Index:
         lexical: sp.spmatrix | sp.sparray | None = None,
         bm25: bool = False,
         smve: bool = False,
+        muvera: bool = False,
         pipeline: str = "dense > maxsim@100",
     ) -> Index:
         """Write a new index folder at `path` and open it.
@@ -127,6 +130,8 @@ class Index:
             bm25: build the `bm25` stage from each document's title and text.
             smve: build the `smve` stage from the token vectors (setting SMVE_BALANCED; about
                 5 minutes for SciFact's 1.86M tokens).
+            muvera: build the `muvera` stage from the token vectors (setting MUVERA_DEFAULT;
+                20,480 floats per document, 425 MB for SciFact).
             pipeline: the default pipeline, recorded in the manifest.
 
         Raises:
@@ -191,14 +196,19 @@ class Index:
                 "b": B,
                 "vocab": vocab,
             }
-        if smve:
+        if smve or muvera:
             # min/max carry NaN and show +-inf without a (T, d) temporary; checked before an
             # encode that can take minutes
             if not (np.isfinite(flat.min()) and np.isfinite(flat.max())):
-                raise ValueError("smve: token vectors must be finite (no NaN or inf)")
+                who = " and ".join(n for n, on in (("smve", smve), ("muvera", muvera)) if on)
+                raise ValueError(f"{who}: token vectors must be finite (no NaN or inf)")
+        if smve:
             smve_arrays, sha = SMVEStage.arrays(flat, offsets, SMVE_BALANCED)
             arrays |= smve_arrays
             stages["smve"] = {"type": "smve", **SMVE_BALANCED, "anchor_sha256": sha}
+        if muvera:
+            arrays |= MuveraStage.arrays(flat, offsets, MUVERA_DEFAULT)
+            stages["muvera"] = {"type": "muvera", **MUVERA_DEFAULT}
         p = parse_pipeline(pipeline)
         _check_pipeline(p, stages)
         existed = path.exists()

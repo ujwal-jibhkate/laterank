@@ -14,6 +14,7 @@ import pytest
 from laterank.kernels.rng import (
     anchor_sha256,
     make_anchors,
+    random_signs,
     sample_indices,
     splitmix64,
     standard_normal,
@@ -159,3 +160,28 @@ def test_normals_look_standard():
     cos = B.T @ B
     off_diag = cos[~np.eye(500, dtype=bool)]
     assert abs(off_diag.mean()) < 0.01 and off_diag.std() == pytest.approx(1 / 16, rel=0.05)
+
+
+def test_random_signs_frozen_and_follow_the_reference_stream():
+    # FROZEN: the first 32 signs for seed 0 (MUVERA's projections are stored, but a rebuild
+    # with the same seed must pick the same ones).
+    got = "".join("+" if s > 0 else "-" for s in random_signs(0, 32))
+    assert got == "-++-----++--+++--++++++-+-+-++--"
+    # And they are the top bits of Vigna's reference stream for the seed derived from "signs".
+    derived = _splitmix64_loop(0 ^ int.from_bytes(b"signs", "little"), 1)[0]
+    want = [1.0 if v >> 63 else -1.0 for v in _splitmix64_loop(derived, 32)]
+    assert random_signs(0, 32).tolist() == want
+
+
+def test_random_signs_are_float32_fair_prefix_stable_and_separate_from_the_raw_stream():
+    s = random_signs(3, 20_000)
+    assert s.dtype == np.float32 and set(s.tolist()) == {-1.0, 1.0}
+    assert abs(s.mean()) < 0.03  # 4 standard deviations of a fair coin
+    assert np.array_equal(random_signs(3, 100), s[:100])
+    raw = np.where(splitmix64(3, 0, 200) >> np.uint64(63) == 1, 1.0, -1.0)
+    assert not np.array_equal(random_signs(3, 200), raw.astype(np.float32))
+    assert random_signs(3, 0).shape == (0,)
+    with pytest.raises(ValueError):
+        random_signs(-1, 5)
+    with pytest.raises(ValueError):
+        random_signs(0, -1)
