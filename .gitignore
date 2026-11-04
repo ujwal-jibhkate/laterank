@@ -27,3 +27,6 @@ htmlcov/
 
 # Claude Code personal settings (team settings in .claude/ are committed)
 .claude/settings.local.json
+.wheelhouse/
+wheelhouse.json
+scripts/git-hooks/post-*
