@@ -55,8 +55,17 @@ def _bgem3(info: EncoderInfo) -> Encoder:
     )
 
 
+def _colbert(info: EncoderInfo) -> Encoder:
+    from laterank.components.colbert import ColBERTEncoder  # imports torch when built
+
+    if info.hf_id is None:
+        raise ValueError("this index records no hf_id for 'colbert', so the model can't be found")
+    # the settings are read off the model, so load_encoder's `info` comparison checks them
+    return ColBERTEncoder(info.hf_id, info.revision)
+
+
 # EncoderInfo.name -> how to rebuild that encoder from its manifest entry
-ENCODERS: dict[str, Callable[[EncoderInfo], Encoder]] = {"bge-m3": _bgem3}
+ENCODERS: dict[str, Callable[[EncoderInfo], Encoder]] = {"bge-m3": _bgem3, "colbert": _colbert}
 
 
 def load_encoder(info: EncoderInfo) -> Encoder:

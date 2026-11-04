@@ -81,6 +81,23 @@ Alone, seeds spread 0.026 (wider than SMVE's 0.010), so the first guess [0.533, 
 and the owner widened it. Reranked, the spread is only 0.003. The golden test runs all three seeds
 (~2 min). Build takes ~22-25 s on the owner's Mac against torch's 13.7 s.
 
+## ColBERT models: laterank's own measurement, no smve-lab reference
+
+Measured 2026-11-04 (M1-7) by `tests/golden/test_colbert.py`, SciFact full corpus, `bm25 >
+maxsim@100`, Apple-silicon Mac (device auto), sentence-transformers 6.2.0. The test only floors
+nDCG@10 at 0.60 (it catches broken vectors); these are not tolerance-checked reference values.
+For scale: BGE-M3 `bm25 > maxsim@100` is 0.7086 (above), with a 718 KB/doc token store
+(359 tokens x 1024 x 2 B, same KB = 1024 B unit as the table).
+
+| model (pinned sha) | dim | nDCG@10 | Recall@100 | tokens/doc | KB/doc (float16) | encode 5,183 docs |
+|---|---|---|---|---|---|---|
+| answerdotai/answerai-colbert-small-v1 `934fa8bb` | 96 | 0.7384 | 0.9249 | 235.2 | 44.1 | 31 s |
+| mixedbread-ai/mxbai-edge-colbert-v0-32m `bb13a29e` | 64 | 0.7453 | 0.9249 | 267.4 | 33.4 | 46 s |
+
+Recall@100 is BM25's, since the rerank reorders the same 100 documents. The two nDCG@10 values
+differ by 0.007 on one dataset and one run each (noise not measured), so quality hardly separates
+them; storage does (mxbai 24% smaller per document).
+
 ## Conditions behind the numbers
 
 - **BM25**: Lucene variant (k1=1.2, b=0.75), using smve-lab's ASCII regex tokenizer and sklearn

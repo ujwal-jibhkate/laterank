@@ -28,7 +28,7 @@ dependencies = [
 [project.optional-dependencies]
 # Names are fixed now; contents arrive with the components that need them (M1+).
 bge-m3 = ["FlagEmbedding>=1.4.2"]
-colbert = []
+colbert = ["sentence-transformers>=6.0.0"]
 rerank = []
 pandas = []
 all = ["laterank[bge-m3,colbert,rerank,pandas]"]

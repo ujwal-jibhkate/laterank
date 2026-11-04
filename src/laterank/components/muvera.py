@@ -60,6 +60,8 @@ class MuveraStage:
     def arrays(flat: np.ndarray, offsets: np.ndarray, cfg: dict) -> dict[str, np.ndarray]:
         """Encode every document -> the segment arrays this stage stores, keyed by path."""
         G, P = make_planes(flat.shape[1], cfg["reps"], cfg["k_sim"], cfg["d_proj"], cfg["seed"])
+        # ponytail: the whole fdes matrix is held in RAM while building (425 MB on SciFact, ~8 GB at
+        # 100k docs); write chunks into a .npy memmap when a corpus that size needs it
         fdes = fde_encode(flat, offsets, G, P, cfg["k_sim"], is_query=False)
         # min/max carry NaN and show +-inf without a copy of fdes; huge tokens can overflow
         if not (np.isfinite(fdes.min(initial=0)) and np.isfinite(fdes.max(initial=0))):
