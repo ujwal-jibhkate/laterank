@@ -5,9 +5,9 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M1: methods + measurements**. M1-1..M1-7 done (M1-7 `92b6c70`, CI green). No spec
-  is approved; M1 is complete. Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (owner, 2026-11-04;
-  not hard-coded, `ColBERTEncoder` still takes `hf_id`).
+- Milestone **M2: evaluate + tune**. Spec **M2-1** (evaluate + `exhaustive`) approved 2026-11-04,
+  0/7 acceptance tests ticked, no code yet. M1 complete. Recommended ColBERT model:
+  **mxbai-edge-colbert-v0-32m** (not hard-coded, `ColBERTEncoder` still takes `hf_id`).
 - Works: texts in, index out (`Index.build(path, docs, BGEM3Encoder() or ColBERTEncoder(hf_id))`);
   first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, each alone or `> maxsim@N`.
 - Nothing is broken. 356 passed; 23 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
@@ -31,6 +31,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 7. ColBERT encoder (`MultiVectorEncoder`) + the two-model measurement (`92b6c70`; answerai
   0.7384, mxbai 0.7453 with `bm25 > maxsim@100`; recommended default: mxbai)
 
+## M2 checklist
+
+- [ ] 1. Evaluate + `exhaustive` first stage (SciFact `exhaustive` = 0.6991)
+- [ ] 2. Label-free `tune`: span queries, exhaustive top-10 as answer key, Pareto frontier, `Budget`
+- [ ] 3. Validate tune on SciFact/NFCorpus/ArguAna against real labels (within 0.01 nDCG@10?)
+
 ## Ported from smve-lab
 
 | smve-lab file | laterank file | what changed |
@@ -50,6 +56,28 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-04 (framing M2)
+- **Done**: researcher report on evaluation APIs (PyTerrier, BEIR, ir_measures, ranx, PyLate,
+  bm25s) and label-free tuning (FAISS AutoTune, ann-benchmarks, PLAID repro). Split M2 into
+  M2-1 evaluate, M2-2 tune, M2-3 validation. Drafted and approved
+  `docs/specs/M2-1-evaluate.md`. No code changed.
+- **Decisions** (owner OK): no dataset loader in M2 (`evaluate` takes plain dicts; loader with
+  the CLI in M3); only nDCG@10 + R@100; no significance tests; timing = `perf_counter` per
+  query, 3 repeats, keep each query's fastest, report p50 (the first pass is the warmup, no
+  extra pass); encoding not timed (queries arrive `Encoded`, like `search`; an encode column
+  in M3); `exhaustive` = a `search` method on `MaxSimReranker`, always available. Golden checks
+  `exhaustive` through the `_run` harness, not `Index.evaluate` (avoids a 3.8 GB token copy).
+- **Research takeaways for M2-2/M2-3**: copy FAISS's operating points (keep the Pareto
+  frontier, pick the best point within budget); FAISS asks for ≥1000 tune queries; agreement
+  with exhaustive ≠ relevance (PLAID repro: BM25+LADR has lower overlap but higher nDCG on
+  DL19), so the M2-3 check against real labels is a release gate; verbatim document spans may
+  favour bm25 (unverified). Source files cached in this session's scratchpad (temporary).
+- **Surprises**: `ruff format --check` also formats Python blocks inside the spec markdown.
+  The schedule slipped ~1 week (design doc had M2 at Oct 26–30).
+- **Next**: build M2-1 task 1: add `MaxSimReranker.search` in `components/maxsim.py` with the
+  AT1 brute-force test in `tests/components/test_maxsim.py`, then accept `exhaustive` in
+  `orchestration/index.py::_check_pipeline` (AT2).
 
 ### 2026-11-04 (M1-7: ColBERT encoder + two-model measurement)
 - **Done**: researcher report (ST 6 `MultiVectorEncoder` vs PyLate, candidates). Drafted, approved,
