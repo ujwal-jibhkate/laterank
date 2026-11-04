@@ -1,7 +1,7 @@
 ---
 id: M1-6
 title: BGE-M3 encoder and Index.build
-status: approved
+status: done
 approved: 2026-11-03
 ---
 
@@ -110,24 +110,24 @@ pyproject: `bge-m3 = ["FlagEmbedding>=1.4.2"]` (the version smve-lab ran).
 
 ## Acceptance tests
 
-- [ ] AT1: `EncoderInfo(settings=...)` round-trips through `write_manifest`/`read_manifest`; a
+- [x] AT1: `EncoderInfo(settings=...)` round-trips through `write_manifest`/`read_manifest`; a
   non-JSON value and a manifest without `settings` raise (`ValueError`, `IndexFormatError`).
-- [ ] AT2: with a fake `Encoder` (hash-seeded numpy vectors, in `tests/`), `Index.build` makes an
+- [x] AT2: with a fake `Encoder` (hash-seeded numpy vectors, in `tests/`), `Index.build` makes an
   index whose stages are `dense`, `lexical`, `hybrid`; `search(encoder.encode_query(t))` runs
   `hybrid > maxsim@100`; a fake with no lexical head and the default pipeline raises `ValueError`
   and leaves no folder.
-- [ ] AT3: `load_encoder` raises `ValueError` for an unknown name and for a revision mismatch
+- [x] AT3: `load_encoder` raises `ValueError` for an unknown name and for a revision mismatch
   (fake `snapshot_download`, no network).
-- [ ] AT4: `import laterank` and every module outside `components/bgem3.py` import with no torch
+- [x] AT4: `import laterank` and every module outside `components/bgem3.py` import with no torch
   installed (`tests/test_layers.py` extended); `BGEM3Encoder()` without the extra raises an
   `ImportError` that says `pip install "laterank[bge-m3]"`.
-- [ ] AT5 (golden, `-m slow`): `BGEM3Encoder` on SciFact's first 20 documents: dense rows have
+- [x] AT5 (golden, `-m slow`): `BGEM3Encoder` on SciFact's first 20 documents: dense rows have
   cosine >= 0.999 with smve-lab's stored `dense`; token counts per document equal smve-lab's
   offsets; lexical term ids match. The 0.999 is my guess for fp16/device noise: tell me if you
   want it tighter or looser.
-- [ ] AT6: `uv run pytest -q` passes (321+ tests) and `uv run ruff check . && uv run ruff format
+- [x] AT6: `uv run pytest -q` passes (321+ tests) and `uv run ruff check . && uv run ruff format
   --check .` is clean.
-- [ ] AT7: the `reviewer` agent returns `merge`.
+- [x] AT7: the `reviewer` agent returns `merge`.
 
 ## Tasks
 

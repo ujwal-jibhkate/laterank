@@ -5,11 +5,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M1: methods + measurements**. M1-1..M1-5 done (`ea95aa5`, CI green on
-  3 OS × 2 Pythons). No spec is approved; next is `/spec M1-6` (encoders + presets).
-- Works: first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, each alone or `> maxsim@N`.
-  All 17 SciFact golden tests pass (~8.5 min; `-k "not smve and not muvera"` ~1 min).
-- Nothing is broken. 321 passed, 17 golden skip without `LATERANK_GOLDEN_DIR`.
+- Milestone **M1: methods + measurements**. M1-1..M1-6 done (M1-6 `2a3cdfc`, CI green). No
+  spec is approved; next is `/spec M1-7` (ColBERT encoder + default model).
+- Works: texts in, index out (`Index.build(path, docs, BGEM3Encoder())`); first stages `dense`,
+  `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, each alone or `> maxsim@N`.
+- Nothing is broken. 343 passed; 19 golden skip without `LATERANK_GOLDEN_DIR` (the 2 encoder ones
+  also need `uv sync --extra bge-m3` and the cached BGE-M3; 17 SciFact pipeline golden pass, ~8.5 min).
 
 ## M0 checklist
 
@@ -25,7 +26,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 3. BM25 (0.6896; `bm25 > maxsim@100` = 0.7086)
 - [x] 4. SMVE (band [0.537, 0.572])
 - [x] 5. MUVERA (band: alone [0.500, 0.580], `muvera > maxsim@100` 0.6888 ± 0.01)
-- [ ] 6. Encoders + presets
+- [x] 6. BGE-M3 encoder + `Index.build` (`2a3cdfc`; spec split: presets dropped for now)
+- [ ] 7. ColBERT encoder (`MultiVectorEncoder`) + the default-model measurement
 
 ## Ported from smve-lab
 
@@ -43,8 +45,37 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `scripts/evaluate_smve.py` (setting w65536_k32_center) | `components/smve.py` | anchors regenerated at open and hash-checked (not stored, 256 MB); doc vectors as postings; `topk_blocks` threaded (argpartition was 89% of encode time) |
 | `scripts/compare_first_stages.py` (rerank the top depth with MaxSim) | `components/maxsim.py`, `orchestration/pipeline.py` | a `Pipeline` object + string grammar; ties go to the lower global row (smve-lab kept candidate order) |
 | `muvera.py` (`MuveraFDE`) | `kernels/muvera.py`, `components/muvera.py` | torch → numpy (`np.bincount` per projected column replaces `index_add_`); planes from the portable RNG (`make_planes`, new `rng.random_signs`) and **stored** in the index (6 MB), not regenerated; `center` and `fill_empty=False` dropped; an empty item gives zeros (smve-lab crashed); `fde_encode` agrees with smve-lab's `encode` to 1.9e-6 |
+| `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-03 (M1-6: BGE-M3 encoder + Index.build)
+- **Done**: researcher report (sentence-transformers 6.1, PyLate, FlagEmbedding: none has presets,
+  none pins a revision). Drafted, approved and built M1-6 (`2a3cdfc`, CI green): `EncoderInfo.settings`
+  (`storage/manifest.py`), `components/encoder.py` (`Encoder`, `EncodedDocs`, `load_encoder`),
+  `components/bgem3.py` (`BGEM3Encoder`), `Index.build` (`orchestration/index.py`), `bge-m3` extra
+  (`FlagEmbedding>=1.4.2`), `tests/conftest.py` (`FakeEncoder`), golden `tests/golden/test_encoder.py`
+  (20 docs + 5 queries vs smve-lab). Reviewer: round 1 "merge" (low findings), round 2 "merge".
+  Spec closed `done`.
+- **Decisions**: spec split in two: presets dropped (no prior art, only SMVE/MUVERA have a band),
+  ColBERT encoder moved to M1-7 (no weights cached, default model decided by measurement). Model
+  pinned by downloading one sha ourselves (FlagEmbedding takes `main`); `settings` records
+  `max_length` + `fp16`. Text sent to the encoder is smve-lab's `"title. text"`. Lexical golden
+  compares weights within 0.002, not term ids (a 0.00014 term dropped under fp16 noise).
+- **Shortcuts with a ceiling** (none marked `# ponytail:` in code, no spec approved to add them):
+  `Index.build` finds a pipeline needing a missing head only after encoding (upgrade: encoders
+  declare their heads); `BGEM3Encoder` downloads the whole repo snapshot, 30 files, size not
+  measured (upgrade: `allow_patterns`); `EncoderInfo` is frozen but holds a dict, so it isn't
+  hashable (upgrade when something hashes it).
+- **Surprises**: smve-lab's golden lexical had a weight-0.00014 term ours lacked, so exact ids
+  were a trap. Adding the `bge-m3` extra made `uv.lock` grow by 2,600 lines (torch and friends). My `_pick_device` imported torch
+  even for `device="cpu"`; the reviewer caught that no test covered it.
+- **Next**: `/spec M1-7`. Start with the `researcher` agent: which small ColBERT checkpoint
+  (e.g. a 64-d one) loads in `MultiVectorEncoder`, and whether `revision=<sha>` takes a full sha
+  (round 1 left that unverified). Pick with the owner how ColBERT's prefixes, query expansion and
+  skiplist go in `EncoderInfo.settings`. Still open from M1-5: add the missing MUVERA `# ponytail:`
+  comment for the in-RAM `fdes` build (commit `Spec: none`), and commit or ignore the Wheelhouse
+  files (`.gitignore`, `wheelhouse.json`, `scripts/git-hooks/post-*`).
 
 ### 2026-11-03 (M1-5: MUVERA)
 - **Done**: drafted, approved and built M1-5: `kernels/muvera.py` (`make_planes`, `fde_encode`),

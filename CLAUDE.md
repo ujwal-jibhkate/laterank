@@ -68,6 +68,9 @@ How it fits this repo (these override ponytail where they differ):
 - Adding/deleting documents in an existing index waits for 0.2.
 - The default encoder (BGE-M3 vs. a small ColBERT model) is decided later by measurement —
   do not hard-code one.
+- Models are pinned: an encoder downloads one Hugging Face commit sha and records it, with every
+  setting that changes the vectors (`EncoderInfo.settings`), in the manifest. Torch and model
+  libraries are imported only inside the encoder's `__init__`, never at import time.
 
 ## Architecture rules
 
@@ -82,6 +85,8 @@ How it fits this repo (these override ponytail where they differ):
 - `uv run pytest` — all tests; golden tests skip themselves unless `LATERANK_GOLDEN_DIR` is set
 - `LATERANK_GOLDEN_DIR=... uv run pytest -m slow` — golden tests only (~8.5 min; SMVE and MUVERA build their indexes)
 - `LATERANK_GOLDEN_DIR=... uv run pytest -m slow -k "not smve and not muvera"` — golden tests without SMVE and MUVERA (~1 min)
+- `uv sync --extra bge-m3` — once, to run the encoder golden tests (they skip without it and the
+  cached BGE-M3 weights; run them with `HF_HUB_OFFLINE=1`)
 - `cd ~/Projects/smve-lab && uv run python ~/Projects/laterank/scripts/export_golden_texts.py` —
   once per machine: the raw texts the golden `bm25` tests need
 - `uv run ruff check . && uv run ruff format --check .` — lint
