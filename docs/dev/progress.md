@@ -5,12 +5,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M1: methods + measurements**. M1-1..M1-6 done (M1-6 `2a3cdfc`, CI green). No
-  spec is approved; next is `/spec M1-7` (ColBERT encoder + default model).
-- Works: texts in, index out (`Index.build(path, docs, BGEM3Encoder())`); first stages `dense`,
-  `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, each alone or `> maxsim@N`.
-- Nothing is broken. 343 passed; 19 golden skip without `LATERANK_GOLDEN_DIR` (the 2 encoder ones
-  also need `uv sync --extra bge-m3` and the cached BGE-M3; 17 SciFact pipeline golden pass, ~8.5 min).
+- Milestone **M1: methods + measurements**. M1-1..M1-7 done (M1-7 `92b6c70`, CI green). No spec
+  is approved; M1 is complete except the **default-model pick** (owner's call, see the 11-04 log).
+- Works: texts in, index out (`Index.build(path, docs, BGEM3Encoder() or ColBERTEncoder(hf_id))`);
+  first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, each alone or `> maxsim@N`.
+- Nothing is broken. 356 passed; 23 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
+  need `uv sync --extra bge-m3` / `--extra colbert`; 17 SciFact pipeline golden ~8.5 min).
 
 ## M0 checklist
 
@@ -27,7 +27,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 4. SMVE (band [0.537, 0.572])
 - [x] 5. MUVERA (band: alone [0.500, 0.580], `muvera > maxsim@100` 0.6888 ± 0.01)
 - [x] 6. BGE-M3 encoder + `Index.build` (`2a3cdfc`; spec split: presets dropped for now)
-- [ ] 7. ColBERT encoder (`MultiVectorEncoder`) + the default-model measurement
+- [x] 7. ColBERT encoder (`MultiVectorEncoder`) + the two-model measurement (`92b6c70`; answerai
+  0.7384, mxbai 0.7453 with `bm25 > maxsim@100`; default-model pick still open)
 
 ## Ported from smve-lab
 
@@ -49,6 +50,29 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Log
 
+### 2026-11-04 (M1-7: ColBERT encoder + two-model measurement)
+- **Done**: researcher report (ST 6 `MultiVectorEncoder` vs PyLate, candidates). Drafted, approved,
+  built and closed M1-7 (`92b6c70`, CI green, spec done): `components/colbert.py`
+  (`ColBERTEncoder`), `colbert` entry in `ENCODERS`, `colbert` extra (`sentence-transformers>=6`),
+  `tests/components/test_colbert.py` (stubs), golden `tests/golden/test_colbert.py`, the missing
+  MUVERA `# ponytail:` comment, a ColBERT section in the `golden-values` skill. Ignored the
+  Wheelhouse files (`2d32d3e`, `Spec: none`). Reviewer: "merge" (low findings, all fixed or noted).
+- **Measured** (SciFact, `bm25 > maxsim@100`, Recall@100 0.9249 for both): answerai-colbert-small-v1
+  (96-d) nDCG@10 0.7384, 44.1 KB/doc, encode 31 s; mxbai-edge-colbert-v0-32m (64-d) 0.7453, 33.4
+  KB/doc, 46 s. BGE-M3 on the same pipeline: 0.7086, 718 KB/doc. One run each, noise not measured.
+- **Decisions**: no default model in code (**owner still to pick**; my lean is mxbai). ST
+  `MultiVectorEncoder`, not PyLate (pins ST 5.3.0). `settings` read off the loaded model, incl.
+  `query_expansion` (with its `token` key) and `skiplist_tasks` (owner OK after review). `hf_id`
+  required; ONNX files skipped in the download (134 MB, not 993).
+- **Shortcuts with a ceiling** (`# ponytail:`): the MUVERA `fdes` build holds the matrix in RAM
+  (425 MB SciFact, ~8 GB at 100k docs); upgrade: chunked `.npy` memmap. Not marked in code: the
+  nDCG floor 0.60 in the golden test only catches broken vectors; tighten once a band is agreed.
+- **Surprises**: mxbai does not pad queries (8 vectors) while answerai pads to 32. The design doc's
+  "64-d, 19x smaller" holds only for mxbai. My first BGE-M3 size (735 KB) was in decimal KB, the
+  table is KiB: 718. First `ruff` run caught a mutable class attribute in my test stub.
+- **Next**: decide the default ColBERT model (owner), then `/spec M1-8` or the next M1/M2 item.
+  Open: no real build-then-`Index.open` test with a real ColBERT model (settings JSON round trip);
+  the `--extra bge-m3` and `--extra colbert` golden commands are in CLAUDE.md.
 ### 2026-11-03 (M1-6: BGE-M3 encoder + Index.build)
 - **Done**: researcher report (sentence-transformers 6.1, PyLate, FlagEmbedding: none has presets,
   none pins a revision). Drafted, approved and built M1-6 (`2a3cdfc`, CI green): `EncoderInfo.settings`

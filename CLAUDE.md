@@ -87,6 +87,8 @@ How it fits this repo (these override ponytail where they differ):
 - `LATERANK_GOLDEN_DIR=... uv run pytest -m slow -k "not smve and not muvera"` — golden tests without SMVE and MUVERA (~1 min)
 - `uv sync --extra bge-m3` — once, to run the encoder golden tests (they skip without it and the
   cached BGE-M3 weights; run them with `HF_HUB_OFFLINE=1`)
+- `uv sync --extra colbert` — once, to run the ColBERT golden tests (`tests/golden/test_colbert.py`,
+  ~1.5 min, downloads two ~134 MB models; `-s` prints the nDCG/size table)
 - `cd ~/Projects/smve-lab && uv run python ~/Projects/laterank/scripts/export_golden_texts.py` —
   once per machine: the raw texts the golden `bm25` tests need
 - `uv run ruff check . && uv run ruff format --check .` — lint

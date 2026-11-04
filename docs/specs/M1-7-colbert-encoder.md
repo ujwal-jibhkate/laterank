@@ -1,7 +1,7 @@
 ---
 id: M1-7
 title: ColBERT encoder and the two-model measurement
-status: approved
+status: done
 approved: 2026-11-04
 ---
 
