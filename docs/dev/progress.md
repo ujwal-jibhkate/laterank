@@ -6,7 +6,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## Current state
 
 - Milestone **M1: methods + measurements**. M1-1..M1-7 done (M1-7 `92b6c70`, CI green). No spec
-  is approved; M1 is complete except the **default-model pick** (owner's call, see the 11-04 log).
+  is approved; M1 is complete. Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (owner, 2026-11-04;
+  not hard-coded, `ColBERTEncoder` still takes `hf_id`).
 - Works: texts in, index out (`Index.build(path, docs, BGEM3Encoder() or ColBERTEncoder(hf_id))`);
   first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, each alone or `> maxsim@N`.
 - Nothing is broken. 356 passed; 23 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
@@ -28,7 +29,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 5. MUVERA (band: alone [0.500, 0.580], `muvera > maxsim@100` 0.6888 ± 0.01)
 - [x] 6. BGE-M3 encoder + `Index.build` (`2a3cdfc`; spec split: presets dropped for now)
 - [x] 7. ColBERT encoder (`MultiVectorEncoder`) + the two-model measurement (`92b6c70`; answerai
-  0.7384, mxbai 0.7453 with `bm25 > maxsim@100`; default-model pick still open)
+  0.7384, mxbai 0.7453 with `bm25 > maxsim@100`; recommended default: mxbai)
 
 ## Ported from smve-lab
 
@@ -60,7 +61,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - **Measured** (SciFact, `bm25 > maxsim@100`, Recall@100 0.9249 for both): answerai-colbert-small-v1
   (96-d) nDCG@10 0.7384, 44.1 KB/doc, encode 31 s; mxbai-edge-colbert-v0-32m (64-d) 0.7453, 33.4
   KB/doc, 46 s. BGE-M3 on the same pipeline: 0.7086, 718 KB/doc. One run each, noise not measured.
-- **Decisions**: no default model in code (**owner still to pick**; my lean is mxbai). ST
+- **Decisions**: mxbai is the recommended default (owner OK: 24% smaller, nDCG@10 0.007 higher;
+  answerai encodes faster), not hard-coded: `ColBERTEncoder` takes `hf_id`. ST
   `MultiVectorEncoder`, not PyLate (pins ST 5.3.0). `settings` read off the loaded model, incl.
   `query_expansion` (with its `token` key) and `skiplist_tasks` (owner OK after review). `hf_id`
   required; ONNX files skipped in the download (134 MB, not 993).
@@ -70,7 +72,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - **Surprises**: mxbai does not pad queries (8 vectors) while answerai pads to 32. The design doc's
   "64-d, 19x smaller" holds only for mxbai. My first BGE-M3 size (735 KB) was in decimal KB, the
   table is KiB: 718. First `ruff` run caught a mutable class attribute in my test stub.
-- **Next**: decide the default ColBERT model (owner), then `/spec M1-8` or the next M1/M2 item.
+- **Next**: draft the next spec (start of M2); the default-model question is closed.
   Open: no real build-then-`Index.open` test with a real ColBERT model (settings JSON round trip);
   the `--extra bge-m3` and `--extra colbert` golden commands are in CLAUDE.md.
 ### 2026-11-03 (M1-6: BGE-M3 encoder + Index.build)
