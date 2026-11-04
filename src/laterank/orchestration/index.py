@@ -22,6 +22,7 @@ import scipy.sparse as sp
 from laterank.components.base import Encoded
 from laterank.components.bm25 import INDPTR, K1, TF, TOKENIZER, B, BM25Stage
 from laterank.components.dense import VECTORS, DenseStage
+from laterank.components.encoder import Encoder
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import WEIGHTS, LexicalStage
 from laterank.components.maxsim import TOKENS, MaxSimReranker
@@ -63,6 +64,20 @@ def _check_pipeline(p: Pipeline, first_stages: Mapping[str, object]) -> None:
     unknown = [name for name, _ in p.rerankers if name not in RERANKERS]
     if unknown:
         raise ValueError(f"'{p}' uses unknown rerankers {unknown}; known: {sorted(RERANKERS)}")
+
+
+def _check_free(path: Path) -> None:
+    if path.exists() and (not path.is_dir() or any(path.iterdir())):
+        raise IndexExistsError(f"{path} already exists and isn't empty; pick a new folder")
+
+
+def _encoder_text(doc: Mapping) -> str:
+    """smve-lab's text joining: "title. text", or just the text when there is no title."""
+    title, text = doc.get("title") or "", doc.get("text") or ""
+    if not isinstance(title, str) or not isinstance(text, str):
+        raise ValueError(f"document {doc.get('id')!r}: title and text must be strings")
+    title, text = title.strip(), text.strip()
+    return f"{title}. {text}" if title else text
 
 
 class Index:
@@ -140,8 +155,7 @@ class Index:
                 (nothing is written).
         """
         path = Path(path)
-        if path.exists() and (not path.is_dir() or any(path.iterdir())):
-            raise IndexExistsError(f"{path} already exists and isn't empty; pick a new folder")
+        _check_free(path)
         flat, offsets = np.asarray(tokens[0]), np.asarray(tokens[1])
         if flat.ndim != 2 or flat.shape[1] != encoder.dim:
             raise ValueError(f"token vectors must be (T, {encoder.dim}), got {flat.shape}")
@@ -223,6 +237,48 @@ class Index:
             if existed:
                 path.mkdir(exist_ok=True)
             raise
+
+    @classmethod
+    def build(
+        cls,
+        path: Path,
+        docs: Sequence[Mapping],
+        encoder: Encoder,
+        *,
+        bm25: bool = False,
+        smve: bool = False,
+        muvera: bool = False,
+        pipeline: str = "hybrid > maxsim@100",
+    ) -> Index:
+        """Encode each document's text with `encoder`, then `create` the index.
+
+        Builds the stages the encoder has heads for (`dense`, `lexical`, and `hybrid` from both)
+        plus any of `bm25`, `smve`, `muvera` you ask for. The text sent to the encoder is
+        "title. text" (just the text when there is no title).
+
+        Raises:
+            IndexExistsError: `path` exists and isn't an empty folder (checked before encoding).
+            ValueError: as in `create`, e.g. the pipeline needs a head this encoder lacks
+                (found after encoding; nothing is written).
+        """
+        path = Path(path)
+        _check_free(path)
+        docs = list(docs)
+        if not all(isinstance(d, Mapping) for d in docs):
+            raise ValueError("every document must be a mapping like {'id': ..., 'text': ...}")
+        enc = encoder.encode_docs([_encoder_text(d) for d in docs])
+        return cls.create(
+            path,
+            docs,
+            (enc.tokens, enc.offsets),
+            encoder=encoder.info,
+            dense=enc.dense,
+            lexical=enc.lexical,
+            bm25=bm25,
+            smve=smve,
+            muvera=muvera,
+            pipeline=pipeline,
+        )
 
     @classmethod
     def open(cls, path: Path) -> Index:

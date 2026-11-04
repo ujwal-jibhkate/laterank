@@ -24,7 +24,13 @@ SHA = "5617a9f61b028005a4858fdac845db406aefb181"
 
 def _manifest(pipeline="hybrid > maxsim@100", docs=5183):
     return Manifest(
-        encoder=EncoderInfo(name="bge-m3", hf_id="BAAI/bge-m3", revision=SHA, dim=1024),
+        encoder=EncoderInfo(
+            name="bge-m3",
+            hf_id="BAAI/bge-m3",
+            revision=SHA,
+            dim=1024,
+            settings={"max_length": 512, "fp16": True},
+        ),
         stages={
             "bm25": {"type": "bm25", "params": {"k1": 1.2, "b": 0.75}},
             "smve-balanced": {"type": "smve", "params": {"w": 65536}, "anchor_sha256": "ab" * 32},
@@ -63,6 +69,7 @@ def test_round_trip(tmp_path):
         "hf_id": "BAAI/bge-m3",
         "revision": SHA,
         "dim": 1024,
+        "settings": {"max_length": 512, "fp16": True},
     }
     assert on_disk["segments"] == [{"id": "seg-000001", "documents": 5183, "tokens": 1861234}]
 
@@ -123,6 +130,10 @@ BAD = {
     "unknown encoder key": (
         lambda d: {**d, "encoder": {**d["encoder"], "extra": 1}},
         "'encoder' has keys",
+    ),
+    "no encoder settings": (  # an index written before `settings` existed
+        lambda d: {**d, "encoder": {k: v for k, v in d["encoder"].items() if k != "settings"}},
+        r"missing \['settings'\].*rebuild",
     ),
     "stage without type": (lambda d: {**d, "stages": {"bm25": {"params": {}}}}, "'type'"),
     "bad segment id": (
@@ -197,6 +208,8 @@ def test_constructor_rejects_bad_values():
         EncoderInfo(name="bge-m3", hf_id="BAAI/bge-m3", revision="main", dim=1024)
     with pytest.raises(ValueError, match="hf_id is not"):
         EncoderInfo(name="x", hf_id=None, revision=SHA, dim=8)
+    with pytest.raises(ValueError, match="settings must be a dict"):
+        EncoderInfo(name="x", hf_id=None, revision=None, dim=8, settings=[("max_length", 512)])
     seg = SegmentInfo(id="seg-000001", documents=1, tokens=1)
     with pytest.raises(ValueError, match="unique"):
         Manifest(
@@ -221,6 +234,14 @@ def test_failure_during_serialization_touches_nothing(tmp_path):
     with pytest.raises(ValueError, match="only JSON values"):
         write_manifest(tmp_path, bad)
     _assert_old_manifest_intact(tmp_path, old)
+
+
+def test_write_refuses_non_json_encoder_settings(tmp_path):
+    m = _manifest()
+    m.encoder.settings["device"] = object()  # mutated after the constructor
+    with pytest.raises(ValueError, match=r"encoder settings.*only JSON values"):
+        write_manifest(tmp_path, m)
+    assert list(tmp_path.iterdir()) == []
 
 
 @pytest.mark.parametrize("step", ["fsync", "replace"])

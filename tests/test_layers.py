@@ -2,6 +2,7 @@
 never import torch (or anything else that would make `pip install laterank` heavy)."""
 
 import ast
+import subprocess
 import sys
 from pathlib import Path
 
@@ -71,3 +72,28 @@ def test_leaf_modules_import_only_the_stdlib(name):
     for imported in _imports(PKG / name):
         top = imported.split(".")[0]
         assert top in sys.stdlib_module_names, f"{name} must stay stdlib-only, imports '{imported}'"
+
+
+# --- model libraries load only inside BGEM3Encoder(), never at import ---------------------------
+
+MODEL_LIBS = ["torch", "FlagEmbedding", "huggingface_hub", "transformers", "sentence_transformers"]
+
+
+def test_every_module_imports_with_the_model_libraries_blocked():
+    code = (
+        "import importlib, pkgutil, sys\n"
+        f"for lib in {MODEL_LIBS!r}: sys.modules[lib] = None  # None makes `import lib` fail\n"
+        "import laterank\n"
+        "for m in pkgutil.walk_packages(laterank.__path__, 'laterank.'):\n"
+        "    importlib.import_module(m.name)\n"
+    )
+    done = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+
+
+def test_bgem3_without_the_extra_says_how_to_install_it(monkeypatch):
+    from laterank.components.bgem3 import BGEM3Encoder
+
+    monkeypatch.setitem(sys.modules, "FlagEmbedding", None)
+    with pytest.raises(ImportError, match=r'pip install "laterank\[bge-m3\]"'):
+        BGEM3Encoder()

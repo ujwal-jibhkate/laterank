@@ -50,7 +50,7 @@ _TOP_KEYS = (
     "default_pipeline",
     "segments",
 )
-_ENCODER_KEYS = ("name", "hf_id", "revision", "dim")
+_ENCODER_KEYS = ("name", "hf_id", "revision", "dim", "settings")
 _SEGMENT_KEYS = ("id", "documents", "tokens")
 _COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 _SEGMENT_ID = re.compile(r"seg-\d{6}")
@@ -73,8 +73,11 @@ class EncoderInfo:
     hf_id: str | None  # e.g. "BAAI/bge-m3"; None for precomputed vectors
     revision: str | None  # 40-hex commit sha; required exactly when hf_id is set
     dim: int  # token vector dimension
+    settings: dict = field(default_factory=dict)  # what else changes the vectors; JSON-only
 
     def __post_init__(self) -> None:
+        if not isinstance(self.settings, dict):
+            raise ValueError(f"encoder settings must be a dict, got {type(self.settings).__name__}")
         if not isinstance(self.name, str) or not self.name:
             raise ValueError("encoder name must be a non-empty string")
         if self.hf_id is not None and (not isinstance(self.hf_id, str) or not self.hf_id):
@@ -224,16 +227,17 @@ def write_manifest(index_dir: Path, manifest: Manifest) -> None:
     index_dir = Path(index_dir)
     try:
         text = json.dumps(manifest.to_dict(), indent=2, ensure_ascii=False, allow_nan=False)
-    except TypeError as e:  # e.g. np.int64 or an object inside stages
-        raise ValueError(f"stages may hold only JSON values ({e})") from None
+    except TypeError as e:  # e.g. np.int64 or an object inside stages or encoder settings
+        raise ValueError(f"stages and encoder settings may hold only JSON values ({e})") from None
     try:  # never write a manifest that read_manifest would refuse or read differently
         same = Manifest.from_dict(json.loads(text)) == manifest
     except IndexFormatError:
         same = False
     if not same:
         raise ValueError(
-            "this manifest wouldn't read back as written: stages may hold only JSON values "
-            "(string keys, lists not tuples) and must not be changed after the Manifest is built"
+            "this manifest wouldn't read back as written: stages and encoder settings may hold "
+            "only JSON values (string keys, lists not tuples) and must not be changed after the "
+            "Manifest is built"
         )
     data = (text + "\n").encode("utf-8")
     index_dir.mkdir(parents=True, exist_ok=True)

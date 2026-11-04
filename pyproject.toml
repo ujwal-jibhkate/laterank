@@ -27,7 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Names are fixed now; contents arrive with the components that need them (M1+).
-bge-m3 = []
+bge-m3 = ["FlagEmbedding>=1.4.2"]
 colbert = []
 rerank = []
 pandas = []
