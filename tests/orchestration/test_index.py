@@ -15,10 +15,14 @@ from laterank.components.lexical import LexicalStage
 from laterank.components.maxsim import MaxSimReranker
 from laterank.components.muvera import MUVERA_DEFAULT, MuveraStage
 from laterank.components.smve import SMVE_BALANCED, SMVEStage
-from laterank.errors import IndexExistsError, IndexFormatError
+from laterank.errors import IndexExistsError, IndexFormatError, PipelineSyntaxError
+from laterank.kernels.maxsim import maxsim_scores
 from laterank.kernels.rng import make_anchors
+from laterank.orchestration import index as index_mod
+from laterank.orchestration import tune as tune_mod
 from laterank.orchestration.index import Index
 from laterank.orchestration.pipeline import parse_pipeline
+from laterank.orchestration.tune import Budget, span_queries
 from laterank.storage.manifest import EncoderInfo, read_manifest, write_manifest
 from laterank.storage.segment import write_segment
 
@@ -469,3 +473,91 @@ def test_muvera_refuses_non_finite_tokens(tmp_path):
     with pytest.raises(ValueError, match="muvera: token vectors must be finite"):
         Index.create(tmp_path / "ix", docs, (flat, offsets), encoder=ENCODER, muvera=True)
     assert not (tmp_path / "ix").exists()
+
+
+def _tune_index(tmp_path, enc, n=60, words=(8, 30)):
+    rng = np.random.default_rng(1)
+    vocab = [f"w{i}" for i in range(40)]
+    texts = [" ".join(rng.choice(vocab, size=rng.integers(*words))) for _ in range(n)]
+    docs = [{"id": f"d{i}", "text": t} for i, t in enumerate(texts)]
+    return Index.build(tmp_path / "ix", docs, enc), texts
+
+
+def test_tune_agreement_matches_a_brute_force_reference(tmp_path, fake_encoder_cls, monkeypatch):
+    enc = fake_encoder_cls()
+    index, texts = _tune_index(tmp_path, enc)
+    points, real_point = [], tune_mod.Point
+    monkeypatch.setattr(tune_mod, "Point", lambda *a: points.append(real_point(*a)) or points[-1])
+    report = index.tune(Budget(1e9), encoder=enc, n_queries=15, seed=2)
+
+    stored = enc.encode_docs(texts)
+    spans = span_queries(texts, 15, seed=2)
+    assert report.n_queries == len(spans) == 15
+
+    def reference(pipeline):
+        total = 0.0
+        for row, span in spans:
+            q = enc.encode_query(span)
+            s = maxsim_scores(q.tokens, np.array([0, len(q.tokens)]), stored.tokens, stored.offsets)
+            key = [r for r in sorted(range(len(texts)), key=lambda r: (-s[0, r], r)) if r != row]
+            got = [int(h.id[1:]) for h in index.search(q, 11, pipeline=pipeline)]
+            total += len(set(key[:10]) & set([r for r in got if r != row][:10])) / 10
+        return total / len(spans)
+
+    expected = ["exhaustive"]
+    for name in ("dense", "hybrid", "lexical"):
+        expected += [name, f"{name} > maxsim@20", f"{name} > maxsim@50"]  # 100+ >= n_docs
+    agreement = {p.pipeline: p.agreement for p in points}
+    assert [p.pipeline for p in points] == expected
+    for p in expected:
+        assert agreement[p] == pytest.approx(reference(p), abs=1e-12)
+    assert agreement["exhaustive"] == 1.0
+    for name in ("dense", "hybrid", "lexical"):
+        assert agreement[f"{name} > maxsim@50"] >= agreement[f"{name} > maxsim@20"]
+    assert report.best == "exhaustive"  # an unlimited budget allows exact search
+
+
+def test_tune_refuses_bad_inputs_before_any_search(tmp_path, fake_encoder_cls, monkeypatch):
+    enc = fake_encoder_cls()
+    index, _ = _tune_index(tmp_path, enc)
+    monkeypatch.setattr(index_mod, "tune", lambda *a: pytest.fail("the engine ran"))
+    budget = Budget(20)
+    bad = [
+        ({"budget": 20}, "budget must be a Budget"),
+        ({"n_queries": 0}, "n_queries"),
+        ({"n_queries": True}, "n_queries"),
+        ({"n_queries": 1.5}, "n_queries"),
+        ({"seed": -1}, "seed"),
+        ({"seed": 2**64}, "seed"),
+        ({"seed": True}, "seed"),
+        ({"encoder": None}, "precomputed vectors"),
+        ({"encoder": fake_encoder_cls(vocab=999)}, "isn't the one this index"),
+    ]
+    for kwargs, match in bad:
+        args = {"budget": budget, "encoder": enc} | kwargs
+        with pytest.raises(ValueError, match=match):
+            index.tune(args.pop("budget"), **args)
+
+    small, _ = _tune_index(tmp_path / "small", enc, n=10)
+    with pytest.raises(ValueError, match="at least 11 documents"):
+        small.tune(budget, encoder=enc)
+    short, _ = _tune_index(tmp_path / "short", enc, n=12, words=(1, 8))
+    with pytest.raises(ValueError, match="none has 8 words"):
+        short.tune(budget, encoder=enc)
+
+
+def test_set_default_writes_the_manifest_and_refuses_bad_pipelines(tmp_path, fake_encoder_cls):
+    index, _ = _tune_index(tmp_path, fake_encoder_cls())
+    path = tmp_path / "ix"
+    index.set_default("dense   >  maxsim@20")
+    assert str(index.default_pipeline) == "dense > maxsim@20"
+    assert index.manifest.default_pipeline == "dense > maxsim@20"
+    assert Index.open(path).manifest == index.manifest
+
+    before = (path / "manifest.json").read_bytes()
+    with pytest.raises(PipelineSyntaxError):
+        index.set_default("dense >")
+    with pytest.raises(ValueError, match="starts with 'smve'"):
+        index.set_default("smve > maxsim@20")
+    assert (path / "manifest.json").read_bytes() == before
+    assert str(index.default_pipeline) == "dense > maxsim@20"

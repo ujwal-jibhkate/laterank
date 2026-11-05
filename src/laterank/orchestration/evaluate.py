@@ -51,6 +51,26 @@ class Evaluation:
         return "\n".join(lines)
 
 
+def _timed_runs(
+    search: Callable[[Pipeline, Encoded, int], Candidates],
+    p: Pipeline,
+    queries: Sequence[Encoded],
+    k: int,
+    repeats: int,
+) -> tuple[list[Candidates], np.ndarray]:
+    """Each query's results (from the first pass) and its fastest of `repeats` times, in s."""
+    best = np.full(len(queries), np.inf)
+    results: list[Candidates] = []
+    for rep in range(repeats):
+        for i, q in enumerate(queries):
+            t0 = time.perf_counter()
+            cands = search(p, q, k)
+            best[i] = min(best[i], time.perf_counter() - t0)
+            if rep == 0:  # search is deterministic: later passes only time
+                results.append(cands)
+    return results, best
+
+
 def evaluate(
     search: Callable[[Pipeline, Encoded, int], Candidates],
     doc_id: Callable[[int], str],
@@ -90,15 +110,8 @@ def evaluate(
     scores = []
     for p in pipelines:
         k = min(RECALL_K, p.rerankers[-1][1]) if p.rerankers else RECALL_K
-        best = np.full(len(qids), np.inf)
-        run: dict[str, list[str]] = {}
-        for rep in range(repeats):
-            for i, qid in enumerate(qids):
-                t0 = time.perf_counter()
-                cands = search(p, queries[qid], k)
-                best[i] = min(best[i], time.perf_counter() - t0)
-                if rep == 0:  # search is deterministic: later passes only time
-                    run[qid] = [doc_id(int(r)) for r in cands.rows]
+        results, best = _timed_runs(search, p, [queries[qid] for qid in qids], k, repeats)
+        run = {qid: [doc_id(int(r)) for r in c.rows] for qid, c in zip(qids, results, strict=True)}
         scores.append(
             Score(
                 str(p),

@@ -5,13 +5,15 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M2: evaluate + tune**. Spec **M2-1** (evaluate + `exhaustive`) done (`826c439`), 7/7
-  acceptance tests ticked, reviewer "merge". No spec approved; next is `/spec M2-2`. M1 complete.
+- Milestone **M2: evaluate + tune**. Specs **M2-1** (evaluate + `exhaustive`) and **M2-2**
+  (label-free `tune` + `set_default`) done, 7/7 acceptance tests each, reviewer "merge". M2-2 not
+  yet committed. No spec approved; next is `/spec M2-3` (validate tune on real labels). M1 complete.
   Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded, `ColBERTEncoder` takes `hf_id`).
 - Works: texts in, index out (`Index.build(path, docs, BGEM3Encoder() or ColBERTEncoder(hf_id))`);
   first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, and `exhaustive` (every
-  index has it), each alone or `> maxsim@N`; `index.evaluate(queries, qrels, pipelines).table()`.
-- Nothing is broken. 361 passed; 23 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
+  index has it), each alone or `> maxsim@N`; `index.evaluate(queries, qrels, pipelines).table()`;
+  `index.tune(Budget(latency_ms=20))` then `index.set_default(report.best)`.
+- Nothing is broken. 378 passed; 24 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
   need `uv sync --extra bge-m3` / `--extra colbert`; 17 SciFact pipeline golden ~8.5 min).
 
 ## M0 checklist
@@ -35,7 +37,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## M2 checklist
 
 - [x] 1. Evaluate + `exhaustive` first stage (SciFact `exhaustive` = 0.6991)
-- [ ] 2. Label-free `tune`: span queries, exhaustive top-10 as answer key, Pareto frontier, `Budget`
+- [x] 2. Label-free `tune` + `set_default`: span queries, exhaustive top-10 as answer key, Pareto
+  frontier, `Budget(latency_ms)`
 - [ ] 3. Validate tune on SciFact/NFCorpus/ArguAna against real labels (within 0.01 nDCG@10?)
 
 ## Ported from smve-lab

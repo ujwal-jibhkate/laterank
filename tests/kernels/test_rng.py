@@ -16,6 +16,7 @@ from laterank.kernels.rng import (
     make_anchors,
     random_signs,
     sample_indices,
+    span_bits,
     splitmix64,
     standard_normal,
 )
@@ -185,3 +186,13 @@ def test_random_signs_are_float32_fair_prefix_stable_and_separate_from_the_raw_s
         random_signs(-1, 5)
     with pytest.raises(ValueError):
         random_signs(0, -1)
+
+
+def test_span_bits_follow_their_own_derived_stream():
+    derived = _splitmix64_loop(0 ^ int.from_bytes(b"spans", "little"), 1)[0]
+    assert span_bits(0, 16).tolist() == _splitmix64_loop(derived, 16)
+    assert not np.array_equal(span_bits(0, 16), splitmix64(0, 0, 16))  # not the anchors' bits
+    assert span_bits(5, 0).shape == (0,)
+    for seed, n in ((-1, 5), (2**64, 5), (0, -1)):
+        with pytest.raises(ValueError):
+            span_bits(seed, n)

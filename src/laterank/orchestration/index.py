@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 import shutil
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -22,7 +22,7 @@ import scipy.sparse as sp
 from laterank.components.base import Encoded
 from laterank.components.bm25 import INDPTR, K1, TF, TOKENIZER, B, BM25Stage
 from laterank.components.dense import VECTORS, DenseStage
-from laterank.components.encoder import Encoder
+from laterank.components.encoder import ENCODERS, Encoder, load_encoder
 from laterank.components.hybrid import HYBRID_ALPHA, HybridStage
 from laterank.components.lexical import WEIGHTS, LexicalStage
 from laterank.components.maxsim import TOKENS, MaxSimReranker
@@ -31,6 +31,7 @@ from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.errors import IndexExistsError, IndexFormatError
 from laterank.orchestration.evaluate import Evaluation, evaluate
 from laterank.orchestration.pipeline import Pipeline, parse_pipeline
+from laterank.orchestration.tune import DEPTHS, KEY_K, Budget, TuneReport, span_queries, tune
 from laterank.storage.manifest import EncoderInfo, Manifest, write_manifest
 from laterank.storage.segment import Segment, open_index, write_segment
 
@@ -342,18 +343,80 @@ class Index:
                 a value isn't an Encoded or has the wrong token dim, repeats < 1, or a
                 pipeline uses a stage this index lacks. All checked before any search runs.
         """
-        ps = [p if isinstance(p, Pipeline) else parse_pipeline(p) for p in pipelines]
-        for p in ps:
-            _check_pipeline(p, self._first)
         return evaluate(
             lambda p, q, k: p.run(self._stages, q, k),
             lambda row: self._docs[row]["id"],
             queries,
             qrels,
-            ps,
+            [self._pipeline(p) for p in pipelines],
             repeats,
             self.manifest.encoder.dim,
         )
+
+    def tune(
+        self, budget: Budget, *, encoder: Encoder | None = None, n_queries: int = 500, seed: int = 0
+    ) -> TuneReport:
+        """Pick the pipeline that best agrees with exhaustive MaxSim within the budget.
+
+        Candidates: `exhaustive`, every built first stage alone, and every built first stage
+        `> maxsim@d` for d in DEPTHS below n_docs. The span's source document is dropped from
+        every result list (each search asks for 11, keeps the first 10 that aren't the source).
+        `encoder` defaults to `load_encoder(self.manifest.encoder)`. See `orchestration/tune.py`.
+
+        Raises:
+            ValueError: budget isn't a Budget, n_queries not an int >= 1, seed out of range,
+                fewer than 11 documents, no document has 8 words, `encoder.info !=
+                self.manifest.encoder`, or the index has no loadable encoder and none was
+                given. All checked before any search.
+        """
+        if not isinstance(budget, Budget):
+            raise ValueError(f"budget must be a Budget, e.g. Budget(latency_ms=20), got {budget!r}")
+        if type(n_queries) is not int or n_queries < 1:  # not bool
+            raise ValueError(f"n_queries must be an integer >= 1, got {n_queries!r}")
+        if type(seed) is not int or not 0 <= seed < 2**64:
+            raise ValueError(f"seed must be an integer in [0, 2**64), got {seed!r}")
+        n = len(self._docs)
+        if n <= KEY_K:
+            raise ValueError(f"tune needs at least {KEY_K + 1} documents, this index has {n}")
+        spans = span_queries([_encoder_text(self._docs[i]) for i in range(n)], n_queries, seed)
+        if not spans:
+            raise ValueError("tune cuts 8-24-word spans out of documents, but none has 8 words")
+        if encoder is None:
+            if self.manifest.encoder.name not in ENCODERS:
+                raise ValueError(
+                    f"this index was built from precomputed vectors ({self.manifest.encoder.name!r}"
+                    "), so tune can't load its model: pass encoder= the one that made them"
+                )
+            encoder = load_encoder(self.manifest.encoder)
+        elif encoder.info != self.manifest.encoder:
+            raise ValueError(
+                f"encoder {encoder.info} isn't the one this index was built with "
+                f"({self.manifest.encoder}): its queries wouldn't match the documents"
+            )
+        pipelines = [Pipeline(EXHAUSTIVE)]
+        for name in sorted(self._first):
+            pipelines += [Pipeline(name)]
+            pipelines += [Pipeline(name, (("maxsim", d),)) for d in DEPTHS if d < n]
+        queries = [(row, encoder.encode_query(span)) for row, span in spans]
+        return tune(lambda p, q, k: p.run(self._stages, q, k), queries, pipelines, budget)
+
+    def set_default(self, pipeline: str | Pipeline) -> None:
+        """Make `pipeline` the default: checked like `search` checks it, then written to the
+        manifest atomically (`write_manifest`) and used by this Index at once.
+
+        Raises:
+            PipelineSyntaxError: the string doesn't parse.
+            ValueError: the pipeline uses a stage this index lacks.
+        """
+        p = self._pipeline(pipeline)
+        manifest = replace(self.manifest, default_pipeline=str(p))
+        write_manifest(self.path, manifest)
+        self.manifest, self._default = manifest, p
+
+    def _pipeline(self, pipeline: str | Pipeline) -> Pipeline:
+        p = pipeline if isinstance(pipeline, Pipeline) else parse_pipeline(pipeline)
+        _check_pipeline(p, self._first)
+        return p
 
     def search(
         self, q: Encoded, k: int = 10, *, pipeline: str | Pipeline | None = None
@@ -365,11 +428,7 @@ class Index:
             ValueError: the pipeline uses a stage this index lacks, k is out of range, or the
                 query doesn't fit the index.
         """
-        if pipeline is None:
-            p = self._default
-        else:
-            p = pipeline if isinstance(pipeline, Pipeline) else parse_pipeline(pipeline)
-            _check_pipeline(p, self._first)
+        p = self._default if pipeline is None else self._pipeline(pipeline)
         cands = p.run(self._stages, q, k)
         hits = []
         for rank, (row, score) in enumerate(zip(cands.rows, cands.scores, strict=True), 1):

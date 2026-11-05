@@ -25,7 +25,8 @@ order. The result: anchors depend only on (seed, d, w), on every machine and num
 
 Separate streams. Different uses of one seed must not read the same random bits, or their
 "random" choices would be tied together. Anchors use the seed's stream directly; every other use
-(`sample_indices`, `random_signs`) first derives its own seed from (seed, purpose tag).
+(`sample_indices`, `random_signs`, `span_bits`) first derives its own seed from (seed, purpose
+tag).
 """
 
 from __future__ import annotations
@@ -51,6 +52,7 @@ _COS_COEFS = [(-1) ** j / math.factorial(2 * j) for j in range(9)]  # x^0 .. x^1
 # Purpose tags: the ASCII bytes of a name, read as a little-endian integer. Never change one.
 _SAMPLE_TAG = int.from_bytes(b"sample", "little")
 _SIGNS_TAG = int.from_bytes(b"signs", "little")
+_SPANS_TAG = int.from_bytes(b"spans", "little")
 
 
 def splitmix64(seed: int, start: int, stop: int) -> np.ndarray:
@@ -193,3 +195,13 @@ def random_signs(seed: int, n: int) -> np.ndarray:
         raise ValueError(f"seed must be in [0, 2**64), got {seed}")
     top = splitmix64(_derive_seed(seed, _SIGNS_TAG), 0, n) >> np.uint64(63)
     return np.where(top == 1, 1.0, -1.0).astype(np.float32)
+
+
+def span_bits(seed: int, n: int) -> np.ndarray:
+    """(n,) uint64: outputs 0 .. n-1 of the stream derived from (seed, "spans"), which tune
+    turns into span lengths and starts. It never reads the anchors' raw stream for `seed`."""
+    if n < 0:
+        raise ValueError(f"n must be non-negative, got {n}")
+    if not 0 <= seed < 2**64:
+        raise ValueError(f"seed must be in [0, 2**64), got {seed}")
+    return splitmix64(_derive_seed(seed, _SPANS_TAG), 0, n)
