@@ -5,13 +5,11 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M2: evaluate + tune**. Specs **M2-1** (evaluate + `exhaustive`) and **M2-2**
-  (label-free `tune` + `set_default`) done, 7/7 acceptance tests each, reviewer "merge". M2-2 not
-  yet committed. No spec approved; next is `/spec M2-3` (validate tune on real labels). M1 complete.
+- Milestone **M2: evaluate + tune**. M2-1 (evaluate + `exhaustive`, `826c439`) and M2-2 (label-free
+  `tune` + `set_default`, `8cfae63`) done. No spec approved; next is `/spec M2-3`. M1 complete.
   Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded, `ColBERTEncoder` takes `hf_id`).
-- Works: texts in, index out (`Index.build(path, docs, BGEM3Encoder() or ColBERTEncoder(hf_id))`);
-  first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, and `exhaustive` (every
-  index has it), each alone or `> maxsim@N`; `index.evaluate(queries, qrels, pipelines).table()`;
+- Works: `Index.build(path, docs, encoder)`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`,
+  `muvera`, `exhaustive`, each alone or `> maxsim@N`; `index.evaluate(...).table()`;
   `index.tune(Budget(latency_ms=20))` then `index.set_default(report.best)`.
 - Nothing is broken. 378 passed; 24 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
   need `uv sync --extra bge-m3` / `--extra colbert`; 17 SciFact pipeline golden ~8.5 min).
@@ -60,6 +58,32 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-05 (M2-2: label-free tune + set_default)
+- **Done**: drafted, approved, built and closed M2-2 (`8cfae63`). New `orchestration/tune.py`
+  (`Budget`, `Point`, `TuneReport`, `span_queries`, the `tune` engine); `Index.tune`,
+  `Index.set_default` and a shared `Index._pipeline` (`orchestration/index.py`); `evaluate.py`'s
+  timing loop is now `_timed_runs`, shared with tune; `kernels/rng.py::span_bits`. Tests in
+  `tests/orchestration/{test_tune,test_index}.py`, `tests/kernels/test_rng.py`. Reviewer: round 1
+  "fix first" (5 findings, all fixed), round 2 "merge".
+- **Decisions**: agreement = overlap of the final top 10 with exhaustive's top 10, source document
+  dropped from both (one rule for every candidate; equals §8's "key in x's top d"). Only the
+  Pareto frontier is kept; `best` = its last point within budget. Default 500 span queries, each
+  timed once (1000 x best-of-3 estimated ~25 min on SciFact; not measured). Spans only, no user
+  query texts (add when M2-3 shows spans mislead). No MB budget (stages are already built).
+  Spans get their own RNG stream (`"spans"` tag): rng.py's rule gives the raw stream to anchors only.
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` still 7, all older).
+- **Surprises**: my first `span_queries` read the raw `splitmix64(seed)` stream, the same bits as
+  SMVE's anchors at seed 0 (reviewer caught it). `Budget(np.float64(20))` was refused by my
+  `type(...) in (int, float)` check. `10**400` doesn't overflow in `0 < ms < math.inf` (Python
+  compares int and float exactly), so the planned overflow guard was dead code. `EncoderInfo`
+  with an `hf_id` needs a 40-char revision, so test encoders differ by `vocab` instead.
+- **Next**: `/spec M2-3`. First decide how tune runs on SciFact/NFCorpus/ArguAna: `Index.tune` needs
+  an index folder (copying SciFact's tokens is 3.8 GB, the reason M2-1's golden test avoids
+  `Index.evaluate`), so either call the `tune` engine on stages built from smve-lab's memmaps
+  (`~/Projects/smve-lab/artifacts/embeddings/{scifact,nfcorpus,arguana}_bgem3`) with BGE-M3
+  encoding the spans (`--extra bge-m3`, `HF_HUB_OFFLINE=1`), or build real indexes. Also: ArguAna
+  needs BEIR's `ignore_identical_ids` (deferred from M2-1), and tune's real runtime is unmeasured.
 
 ### 2026-11-05 (M2-1: evaluate + exhaustive)
 - **Done**: `MaxSimReranker.search` and `_check_dim` (`components/maxsim.py`); `EXHAUSTIVE` accepted
