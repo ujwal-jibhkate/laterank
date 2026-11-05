@@ -83,10 +83,26 @@ def test_create_refuses_bad_inputs_and_writes_nothing(tmp_path):
 def test_search_names_the_stages_an_index_has(tmp_path):
     docs, tokens, dense, q = _data()
     index = Index.create(tmp_path / "ix", docs, tokens, encoder=ENCODER, dense=dense)
-    with pytest.raises(ValueError, match=r"first stages \['dense'\]"):
+    with pytest.raises(ValueError, match=r"first stages \['dense', 'exhaustive'\]"):
         index.search(q, pipeline="bm25 > maxsim@100")
     with pytest.raises(ValueError, match="unknown rerankers"):
         index.search(q, pipeline="dense > colbert@100")
+
+
+def test_exhaustive_is_a_first_stage_every_index_has(tmp_path):
+    docs, (flat, offsets), dense, q = _data()
+    stages = {"maxsim": MaxSimReranker(flat, offsets)}
+    index = Index.create(tmp_path / "a", docs, (flat, offsets), encoder=ENCODER, dense=dense)
+    for spec, k in (("exhaustive", 10), ("exhaustive > maxsim@5", 3)):
+        want = parse_pipeline(spec).run({"exhaustive": stages["maxsim"], **stages}, q, k)
+        assert [h.id for h in index.search(q, k, pipeline=spec)] == [f"d{r}" for r in want.rows]
+
+    # the only stage an index has, and its default; not written to the manifest
+    Index.create(tmp_path / "b", docs, (flat, offsets), encoder=ENCODER, pipeline="exhaustive")
+    reopened = Index.open(tmp_path / "b")
+    assert str(reopened.default_pipeline) == "exhaustive"
+    assert reopened.manifest.stages == {}
+    assert len(reopened.search(q, 5)) == 5
 
 
 def test_open_refuses_a_bad_default_pipeline_and_extra_segments(tmp_path):
@@ -229,7 +245,7 @@ def test_lexical_only_has_no_hybrid(tmp_path):
         lexical=lexical,
         pipeline="lexical > maxsim@100",
     )
-    with pytest.raises(ValueError, match=r"first stages \['lexical'\]"):
+    with pytest.raises(ValueError, match=r"first stages \['exhaustive', 'lexical'\]"):
         index.search(q, pipeline="hybrid")
 
 
@@ -320,7 +336,7 @@ def test_bm25_matches_the_pipeline(tmp_path):
         assert [h.score for h in hits] == want.scores.tolist()
 
     plain = Index.create(tmp_path / "plain", docs, (flat, offsets), encoder=ENCODER, dense=dense)
-    with pytest.raises(ValueError, match=r"first stages \['dense'\]"):
+    with pytest.raises(ValueError, match=r"first stages \['dense', 'exhaustive'\]"):
         plain.search(q, pipeline="bm25")
 
 

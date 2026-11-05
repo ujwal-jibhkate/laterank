@@ -106,13 +106,13 @@ class Evaluation:
 
 ## Acceptance tests
 
-- [ ] AT1: `MaxSimReranker.search` equals a brute-force reference (`maxsim_scores` over all docs, then a stable sort by score with ties to the lower row) on a random small token store, including k > n_docs (returns n_docs rows).
-- [ ] AT2: `exhaustive` works as a pipeline's first stage in `search`, inside `"exhaustive > maxsim@5"`, and as the default pipeline of an index built with no other stage (`Index.create(..., pipeline="exhaustive")`, then `Index.open`).
-- [ ] AT3: on a small index, `evaluate` with two pipelines gives the same nDCG@10 and Recall@100 as `mean_metric` over a run built with `search`. `scores` keeps the given order, `p50_ms` is finite and > 0, and `table()` has a header plus one line per pipeline.
-- [ ] AT4: each error in `evaluate`'s Raises list is raised, and no search runs first (checked with a stage that counts calls).
-- [ ] AT5 (golden, slow): SciFact `exhaustive` through `parse_pipeline("exhaustive").run(...)` gives nDCG@10 0.6991 and Recall@100 0.9203 (±0.002).
-- [ ] AT6: `uv run pytest -q`, `uv run ruff check .` and `uv run ruff format --check .` pass, and `tests/test_layers.py` still passes (no new imports pointing up).
-- [ ] AT7: reviewer agent verdict `merge`.
+- [x] AT1: `MaxSimReranker.search` equals a brute-force reference (`maxsim_scores` over all docs, then a stable sort by score with ties to the lower row) on a random small token store, including k > n_docs (returns n_docs rows).
+- [x] AT2: `exhaustive` works as a pipeline's first stage in `search`, inside `"exhaustive > maxsim@5"`, and as the default pipeline of an index built with no other stage (`Index.create(..., pipeline="exhaustive")`, then `Index.open`).
+- [x] AT3: on a small index, `evaluate` with two pipelines gives the same nDCG@10 and Recall@100 as `mean_metric` over a run built with `search`. `scores` keeps the given order, `p50_ms` is finite and > 0, and `table()` has a header plus one line per pipeline.
+- [x] AT4: each error in `evaluate`'s Raises list is raised, and no search runs first (checked with a stage that counts calls).
+- [x] AT5 (golden, slow): SciFact `exhaustive` through `parse_pipeline("exhaustive").run(...)` gives nDCG@10 0.6991 and Recall@100 0.9203 (±0.002).
+- [x] AT6: `uv run pytest -q`, `uv run ruff check .` and `uv run ruff format --check .` pass, and `tests/test_layers.py` still passes (no new imports pointing up).
+- [x] AT7: reviewer agent verdict `merge`.
 
 ## Tasks
 
@@ -123,3 +123,14 @@ class Evaluation:
 | 3 | golden AT5 | `tests/golden/test_scifact.py` | 1 | yes, with 2 |
 
 ## Changes
+
+- 2026-11-05: `Index.evaluate` also raises `ValueError` for a judged query whose token dim differs
+  from the index (reviewer finding; a late failure would lose a long run). The engine
+  `orchestration/evaluate.py::evaluate(search, doc_id, queries, qrels, pipelines, repeats, dim)`
+  takes the index as two callables plus `dim`; it is not part of the public Interfaces.
+- 2026-11-05: the "first stages" error text now lists `exhaustive`; three existing test regexes
+  updated. `MaxSimReranker.rerank` and `search` share `_check_dim`, run before any copy.
+- 2026-11-05: AT5 verified with `LATERANK_GOLDEN_DIR=~/Projects/smve-lab/artifacts/embeddings
+  pytest -m slow -k exhaustive` (2 passed, 182 s; `test_exhaustive_pipeline` is the new one).
+- 2026-11-05: reviewer verdict `merge` (4 low findings: 1 and 2 fixed; 3 and 4 skipped: a test
+  nobody asked for, and an unreachable empty `Evaluation`).

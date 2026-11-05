@@ -5,12 +5,13 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M2: evaluate + tune**. Spec **M2-1** (evaluate + `exhaustive`) approved 2026-11-04,
-  0/7 acceptance tests ticked, no code yet. M1 complete. Recommended ColBERT model:
-  **mxbai-edge-colbert-v0-32m** (not hard-coded, `ColBERTEncoder` still takes `hf_id`).
+- Milestone **M2: evaluate + tune**. Spec **M2-1** (evaluate + `exhaustive`) built, 7/7 acceptance
+  tests ticked, reviewer "merge"; uncommitted, waiting for the owner's `/spec M2-1 done`. M1 complete.
+  Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded, `ColBERTEncoder` takes `hf_id`).
 - Works: texts in, index out (`Index.build(path, docs, BGEM3Encoder() or ColBERTEncoder(hf_id))`);
-  first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, each alone or `> maxsim@N`.
-- Nothing is broken. 356 passed; 23 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
+  first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, and `exhaustive` (every
+  index has it), each alone or `> maxsim@N`; `index.evaluate(queries, qrels, pipelines).table()`.
+- Nothing is broken. 361 passed; 23 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
   need `uv sync --extra bge-m3` / `--extra colbert`; 17 SciFact pipeline golden ~8.5 min).
 
 ## M0 checklist
@@ -33,7 +34,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## M2 checklist
 
-- [ ] 1. Evaluate + `exhaustive` first stage (SciFact `exhaustive` = 0.6991)
+- [x] 1. Evaluate + `exhaustive` first stage (SciFact `exhaustive` = 0.6991)
 - [ ] 2. Label-free `tune`: span queries, exhaustive top-10 as answer key, Pareto frontier, `Budget`
 - [ ] 3. Validate tune on SciFact/NFCorpus/ArguAna against real labels (within 0.01 nDCG@10?)
 
@@ -56,6 +57,23 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-05 (M2-1: evaluate + exhaustive)
+- **Done**: `MaxSimReranker.search` and `_check_dim` (`components/maxsim.py`); `EXHAUSTIVE` accepted
+  by `_check_pipeline`, registered in `Index._stages`, plus `Index.evaluate` (`orchestration/index.py`);
+  new `orchestration/evaluate.py` (`Score`, `Evaluation.table()`, `evaluate`); tests in
+  `tests/components/test_maxsim.py`, `tests/orchestration/{test_index,test_evaluate}.py`; golden
+  `test_exhaustive_pipeline` (SciFact 0.6991 / 0.9203). Reviewer: "merge", findings 1-2 fixed.
+- **Decisions**: the engine takes `search` and `doc_id` callables plus `dim`, so `index.py` stays
+  small (spec Changes). Query dim is checked before any search (a late failure loses a long run).
+  Skipped reviewer findings 3-4 (tests nobody asked for; an empty `Evaluation` is unreachable).
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` still 7, all older).
+- **Surprises**: my first AT3 test asked a `maxsim@20` pipeline for k=100 (the pipeline refuses it);
+  the test now uses evaluate's rule k = min(100, last depth). The two `exhaustive` golden tests took
+  182 s together, not ~27 s as logged in October (cause not checked).
+- **Next**: owner runs `/spec M2-1 done` and commits. Then `/spec M2-2` (label-free `tune`): start
+  with the research takeaways in the 2026-11-04 entry (Pareto frontier, `Budget`, span queries,
+  exhaustive top-10 as answer key) and decide the `Budget` shape with the owner.
 
 ### 2026-11-04 (framing M2)
 - **Done**: researcher report on evaluation APIs (PyTerrier, BEIR, ir_measures, ranx, PyLate,

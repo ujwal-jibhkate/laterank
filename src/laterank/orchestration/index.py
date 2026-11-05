@@ -29,6 +29,7 @@ from laterank.components.maxsim import TOKENS, MaxSimReranker
 from laterank.components.muvera import MUVERA_DEFAULT, MuveraStage
 from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.errors import IndexExistsError, IndexFormatError
+from laterank.orchestration.evaluate import Evaluation, evaluate
 from laterank.orchestration.pipeline import Pipeline, parse_pipeline
 from laterank.storage.manifest import EncoderInfo, Manifest, write_manifest
 from laterank.storage.segment import Segment, open_index, write_segment
@@ -43,6 +44,9 @@ STORED_STAGES = {
 }
 FIRST_STAGE_TYPES = {*STORED_STAGES, "hybrid"}  # hybrid is built from dense + lexical
 RERANKERS = {"maxsim": MaxSimReranker}
+# A first stage every index has: the token store's MaxSimReranker, scoring every document. Like
+# `maxsim` it is not written to manifest.stages.
+EXHAUSTIVE = "exhaustive"
 
 
 @dataclass(frozen=True)
@@ -55,11 +59,11 @@ class Hit:
 
 
 def _check_pipeline(p: Pipeline, first_stages: Mapping[str, object]) -> None:
-    if p.first not in first_stages:
+    if p.first != EXHAUSTIVE and p.first not in first_stages:
         raise ValueError(
             f"'{p}' starts with '{p.first}', but this index has the first stages "
-            f"{sorted(first_stages)}: start the pipeline with one of them, or build the index "
-            f"with that stage (e.g. Index.create(..., dense=..., lexical=...))"
+            f"{sorted([EXHAUSTIVE, *first_stages])}: start the pipeline with one of them, or "
+            f"build the index with that stage (e.g. Index.create(..., dense=..., lexical=...))"
         )
     unknown = [name for name, _ in p.rerankers if name not in RERANKERS]
     if unknown:
@@ -104,6 +108,7 @@ class Index:
             reranker = {name: c.from_segment(segment) for name, c in RERANKERS.items()}
             self._stages = {**self._first, **reranker}
             tokens = self._stages["maxsim"]
+            self._stages[EXHAUSTIVE] = tokens
             problems = [] if len(tokens.offsets) - 1 == n else ["token offsets"]
             if tokens.flat.shape[1] != manifest.encoder.dim:
                 problems.append("token dim")
@@ -316,6 +321,39 @@ class Index:
     @property
     def default_pipeline(self) -> Pipeline:
         return self._default
+
+    def evaluate(
+        self,
+        queries: Mapping[str, Encoded],
+        qrels: Mapping[str, Mapping[str, float]],
+        pipelines: Sequence[str | Pipeline],
+        *,
+        repeats: int = 3,
+    ) -> Evaluation:
+        """Run each pipeline on every judged query and score it.
+
+        Only queries in `qrels` run; extra queries are ignored. Each pipeline returns
+        k = min(100, its last depth) documents, so Recall@100 of "x > maxsim@10" counts 10.
+        Reports nDCG@10, Recall@100 and p50 ms (see `orchestration/evaluate.py`).
+
+        Raises:
+            PipelineSyntaxError: a pipeline string doesn't parse.
+            ValueError: qrels or pipelines is empty, a judged query is missing from `queries`,
+                a value isn't an Encoded or has the wrong token dim, repeats < 1, or a
+                pipeline uses a stage this index lacks. All checked before any search runs.
+        """
+        ps = [p if isinstance(p, Pipeline) else parse_pipeline(p) for p in pipelines]
+        for p in ps:
+            _check_pipeline(p, self._first)
+        return evaluate(
+            lambda p, q, k: p.run(self._stages, q, k),
+            lambda row: self._docs[row]["id"],
+            queries,
+            qrels,
+            ps,
+            repeats,
+            self.manifest.encoder.dim,
+        )
 
     def search(
         self, q: Encoded, k: int = 10, *, pipeline: str | Pipeline | None = None

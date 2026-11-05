@@ -5,6 +5,7 @@ import pytest
 
 from laterank.components.base import Candidates, Encoded
 from laterank.components.maxsim import MaxSimReranker
+from laterank.kernels.maxsim import maxsim_scores
 
 
 def _cands(rows):
@@ -30,6 +31,25 @@ def test_matches_naive_loop():
     np.testing.assert_allclose(
         got.scores, [_naive(q, flat, offsets, r) for r in expected], rtol=1e-5
     )
+
+
+def test_search_matches_brute_force_including_k_over_n_docs():
+    rng = np.random.default_rng(1)
+    lengths = rng.integers(1, 6, size=25)
+    lengths[5] = lengths[2]
+    flat = rng.standard_normal((lengths.sum(), 8)).astype(np.float16)
+    offsets = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int64)
+    flat[offsets[5] : offsets[6]] = flat[offsets[2] : offsets[3]]  # docs 2 and 5 tie
+    q = Encoded(rng.standard_normal((4, 8)).astype(np.float32))
+    all_scores = maxsim_scores(q.tokens, np.array([0, 4]), flat, offsets)[0]
+    want = sorted(range(25), key=lambda r: (-all_scores[r], r))  # ties to the lower row
+    reranker = MaxSimReranker(flat, offsets)
+    for k in (1, 7, 25, 100):
+        got = reranker.search(q, k)
+        assert got.rows.tolist() == want[: min(k, 25)]
+        assert got.scores.tolist() == all_scores[want[: min(k, 25)]].tolist()
+    with pytest.raises(ValueError, match="dim"):
+        reranker.search(Encoded(np.ones((1, 3), dtype=np.float32)), 3)
 
 
 def test_ties_go_to_the_lower_row_whatever_the_input_order():

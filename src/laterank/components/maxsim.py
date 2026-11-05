@@ -1,4 +1,5 @@
 """The `maxsim` reranker: exact MaxSim, computed only for the candidates it is handed.
+(`search` scores every document instead: the `exhaustive` first stage.)
 
 It reads the candidates' token vectors out of the index's token store (memory-mapped, so only
 those documents are paged in) and scores them with the MaxSim kernel.
@@ -30,13 +31,27 @@ class MaxSimReranker:
     def from_segment(cls, seg: Segment) -> MaxSimReranker:
         return cls(*load_ragged(seg.folder / TOKENS))
 
-    def rerank(self, q: Encoded, cands: Candidates) -> Candidates:
+    def _scores(self, q: Encoded, d_flat: np.ndarray, d_offsets: np.ndarray) -> np.ndarray:
+        q_offsets = np.array([0, len(q.tokens)], dtype=np.int64)
+        return maxsim_scores(q.tokens, q_offsets, d_flat, d_offsets)[0]
+
+    def _check_dim(self, q: Encoded) -> None:
         dim = self.flat.shape[1]
         if q.tokens.shape[1] != dim:
             raise ValueError(f"query tokens have dim {q.tokens.shape[1]}, the index has {dim}")
+
+    def search(self, q: Encoded, k: int) -> Candidates:
+        """Exact MaxSim against every document: the top min(k, n_docs), ties to the lower row.
+        Scores the full token store in place (no subset copy)."""
+        self._check_dim(q)
+        scores = self._scores(q, self.flat, self.offsets)
+        order = top_k(scores, k)
+        return Candidates(order, scores[order])
+
+    def rerank(self, q: Encoded, cands: Candidates) -> Candidates:
+        self._check_dim(q)  # before the subset copy
         rows = np.sort(cands.rows)
         d_flat, d_offsets = subset_ragged(self.flat, self.offsets, rows)
-        q_offsets = np.array([0, len(q.tokens)], dtype=np.int64)
-        scores = maxsim_scores(q.tokens, q_offsets, d_flat, d_offsets)[0]
+        scores = self._scores(q, d_flat, d_offsets)
         order = top_k(scores, len(rows))
         return Candidates(rows[order], scores[order])

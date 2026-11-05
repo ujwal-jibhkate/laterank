@@ -102,6 +102,13 @@ def test_pipeline(scifact, stages, spec, ndcg10, recall100):
     _check_run(_run(scifact, stages, spec), scifact, ndcg10, recall100)
 
 
+@pytest.mark.slow
+def test_exhaustive_pipeline(scifact, stages):
+    """The `exhaustive` first stage (MaxSimReranker.search), through the pipeline harness."""
+    run = _run(scifact, {"exhaustive": stages["maxsim"]}, "exhaustive")
+    _check_run(run, scifact, ndcg10=0.6991, recall100=0.9203)
+
+
 def _run(data, stages: dict, spec: str) -> dict[str, list[str]]:
     pipeline, off = parse_pipeline(spec), data.q_offsets
     run = {}
