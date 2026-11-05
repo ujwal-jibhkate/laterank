@@ -5,8 +5,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M2: evaluate + tune**. Spec **M2-1** (evaluate + `exhaustive`) built, 7/7 acceptance
-  tests ticked, reviewer "merge"; uncommitted, waiting for the owner's `/spec M2-1 done`. M1 complete.
+- Milestone **M2: evaluate + tune**. Spec **M2-1** (evaluate + `exhaustive`) done (`826c439`), 7/7
+  acceptance tests ticked, reviewer "merge". No spec approved; next is `/spec M2-2`. M1 complete.
   Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded, `ColBERTEncoder` takes `hf_id`).
 - Works: texts in, index out (`Index.build(path, docs, BGEM3Encoder() or ColBERTEncoder(hf_id))`);
   first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, and `exhaustive` (every
@@ -71,7 +71,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - **Surprises**: my first AT3 test asked a `maxsim@20` pipeline for k=100 (the pipeline refuses it);
   the test now uses evaluate's rule k = min(100, last depth). The two `exhaustive` golden tests took
   182 s together, not ~27 s as logged in October (cause not checked).
-- **Next**: owner runs `/spec M2-1 done` and commits. Then `/spec M2-2` (label-free `tune`): start
+- **Next**: `/spec M2-2` (label-free `tune`): start
   with the research takeaways in the 2026-11-04 entry (Pareto frontier, `Budget`, span queries,
   exhaustive top-10 as answer key) and decide the `Budget` shape with the owner.
 

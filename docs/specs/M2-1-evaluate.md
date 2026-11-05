@@ -1,7 +1,7 @@
 ---
 id: M2-1
 title: Evaluate pipelines, and the exhaustive first stage
-status: approved
+status: done
 approved: 2026-11-04
 ---
 
