@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 import numbers
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -28,6 +28,9 @@ from laterank.orchestration.pipeline import Pipeline
 DEPTHS = (20, 50, 100, 200, 500, 1000)  # rerank depths tried; only those < n_docs
 SPAN_WORDS = (8, 24)  # span length in words, both ends included
 KEY_K = 10  # agreement = |top 10 ∩ exhaustive top 10| / 10
+# A first stage every index has: the token store's MaxSimReranker, scoring every document. Like
+# `maxsim` it is not written to manifest.stages.
+EXHAUSTIVE = "exhaustive"
 
 
 @dataclass(frozen=True)
@@ -84,6 +87,16 @@ def span_queries(texts: Sequence[str], n: int, seed: int = 0) -> list[tuple[int,
         start = r[2 * j + 1] % (len(w) - length + 1)
         spans.append((row, " ".join(w[start : start + length])))
     return spans
+
+
+def candidates(first_stages: Iterable[str], n_docs: int) -> list[Pipeline]:
+    """[exhaustive] + for each name in sorted order: name, then name > maxsim@d for d in DEPTHS
+    with d < n_docs. The list `Index.tune` measures."""
+    pipelines = [Pipeline(EXHAUSTIVE)]
+    for name in sorted(first_stages):
+        pipelines += [Pipeline(name)]
+        pipelines += [Pipeline(name, (("maxsim", d),)) for d in DEPTHS if d < n_docs]
+    return pipelines
 
 
 def tune(

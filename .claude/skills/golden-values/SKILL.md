@@ -98,6 +98,28 @@ Recall@100 is BM25's, since the rerank reorders the same 100 documents. The two 
 differ by 0.007 on one dataset and one run each (noise not measured), so quality hardly separates
 them; storage does (mxbai 24% smaller per document).
 
+## Label-free tune vs real labels (M2-3, measured 2026-11-05)
+
+`scripts/validate_tune.py`, 500 span queries (seed 0), all 43 candidates, owner's Mac. Full tables:
+`docs/dev/tune_validation.md`. laterank's `exhaustive` through the evaluate engine (sanity gate,
+±0.002): SciFact 0.6991, NFCorpus 0.3447, ArguAna 0.4854 (with `ignore_identical_ids`).
+
+| dataset | verdict (every gap <= 0.01?) | worst gap at budgets >= 1 ms | run time |
+|---|---|---|---|
+| SciFact | fails | 0.0139 (3.2 ms) | 41.5 min |
+| NFCorpus | fails below 1 ms only | 0.0074 | 33.7 min |
+| ArguAna | fails at every budget above 1 ms | 0.0422 (`dense > maxsim@50` 0.4852 vs `dense` 0.5274) | 110.9 min |
+
+SciFact and NFCorpus also fail below 1 ms (up to 0.05): tune picks `lexical`/`dense` over `bm25`.
+Tune never picks `bm25 > maxsim@d`, the label winner on SciFact and NFCorpus. On ArguAna, with no
+limit, tune picks `exhaustive` (0.4854) and labels pick `dense` (0.5274): gap 0.0420. These are
+measurements, not tolerance-checked reference values.
+
+Not gated, noted for future NFCorpus/ArguAna golden tests: laterank's `bm25` alone runs a little
+above smve-lab's (0.6900 / 0.3291 / 0.4941 vs 0.6896 / 0.3279 / 0.4919; ArguAna +0.0022, just
+outside ±0.002, cause not found). ArguAna reranks score d-1 documents when the query itself is in
+the first stage's top d (see spec M2-3 Changes), e.g. `bm25 > maxsim@100` R@100 0.9716 vs 0.9730.
+
 ## Conditions behind the numbers
 
 - **BM25**: Lucene variant (k1=1.2, b=0.75), using smve-lab's ASCII regex tokenizer and sklearn

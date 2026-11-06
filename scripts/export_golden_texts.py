@@ -7,13 +7,15 @@ inside smve-lab's environment:
     cd ~/Projects/smve-lab && uv run python ~/Projects/laterank/scripts/export_golden_texts.py
 
 It writes artifacts/embeddings/<name>_bgem3/{docs,queries}_texts.json: a JSON list of strings,
-aligned with the {docs,queries}_ids.json already there (checked before writing).
+aligned with the {docs,queries}_ids.json already there (checked before writing), and
+qrels_test.json: {query_id: {doc_id: relevance}}, relevance > 0, as smve-lab's load_qrels.
+Pass dataset names to export more than SciFact: ... export_golden_texts.py scifact nfcorpus arguana
 """
 
 import json
 import sys
 
-from smve_lab.datasets import emb_dir, load_texts
+from smve_lab.datasets import emb_dir, load_qrels, load_texts
 
 
 def main(names: list[str]) -> None:
@@ -27,6 +29,10 @@ def main(names: list[str]) -> None:
             out = folder / f"{side}_texts.json"
             out.write_text(json.dumps(texts, ensure_ascii=False), encoding="utf-8")
             print(f"wrote {out} ({len(texts)} texts)")
+        qrels = load_qrels(name)
+        out = folder / "qrels_test.json"
+        out.write_text(json.dumps(qrels), encoding="utf-8")
+        print(f"wrote {out} ({len(qrels)} judged queries)")
 
 
 if __name__ == "__main__":

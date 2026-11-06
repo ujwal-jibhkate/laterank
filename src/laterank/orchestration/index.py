@@ -31,7 +31,15 @@ from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.errors import IndexExistsError, IndexFormatError
 from laterank.orchestration.evaluate import Evaluation, evaluate
 from laterank.orchestration.pipeline import Pipeline, parse_pipeline
-from laterank.orchestration.tune import DEPTHS, KEY_K, Budget, TuneReport, span_queries, tune
+from laterank.orchestration.tune import (
+    EXHAUSTIVE,
+    KEY_K,
+    Budget,
+    TuneReport,
+    candidates,
+    span_queries,
+    tune,
+)
 from laterank.storage.manifest import EncoderInfo, Manifest, write_manifest
 from laterank.storage.segment import Segment, open_index, write_segment
 
@@ -45,9 +53,6 @@ STORED_STAGES = {
 }
 FIRST_STAGE_TYPES = {*STORED_STAGES, "hybrid"}  # hybrid is built from dense + lexical
 RERANKERS = {"maxsim": MaxSimReranker}
-# A first stage every index has: the token store's MaxSimReranker, scoring every document. Like
-# `maxsim` it is not written to manifest.stages.
-EXHAUSTIVE = "exhaustive"
 
 
 @dataclass(frozen=True)
@@ -330,6 +335,7 @@ class Index:
         pipelines: Sequence[str | Pipeline],
         *,
         repeats: int = 3,
+        ignore_identical_ids: bool = False,
     ) -> Evaluation:
         """Run each pipeline on every judged query and score it.
 
@@ -337,11 +343,16 @@ class Index:
         k = min(100, its last depth) documents, so Recall@100 of "x > maxsim@10" counts 10.
         Reports nDCG@10, Recall@100 and p50 ms (see `orchestration/evaluate.py`).
 
+        ignore_identical_ids: drop a hit whose doc id equals its query id (BEIR's rule;
+        ArguAna's queries are corpus documents). Each search then asks for min(k + 1, last
+        depth) and keeps the first k that aren't the query itself.
+
         Raises:
             PipelineSyntaxError: a pipeline string doesn't parse.
             ValueError: qrels or pipelines is empty, a judged query is missing from `queries`,
-                a value isn't an Encoded or has the wrong token dim, repeats < 1, or a
-                pipeline uses a stage this index lacks. All checked before any search runs.
+                a value isn't an Encoded or has the wrong token dim, repeats < 1,
+                ignore_identical_ids isn't a bool, or a pipeline uses a stage this index
+                lacks. All checked before any search runs.
         """
         return evaluate(
             lambda p, q, k: p.run(self._stages, q, k),
@@ -351,6 +362,7 @@ class Index:
             [self._pipeline(p) for p in pipelines],
             repeats,
             self.manifest.encoder.dim,
+            ignore_identical_ids,
         )
 
     def tune(
@@ -393,10 +405,7 @@ class Index:
                 f"encoder {encoder.info} isn't the one this index was built with "
                 f"({self.manifest.encoder}): its queries wouldn't match the documents"
             )
-        pipelines = [Pipeline(EXHAUSTIVE)]
-        for name in sorted(self._first):
-            pipelines += [Pipeline(name)]
-            pipelines += [Pipeline(name, (("maxsim", d),)) for d in DEPTHS if d < n]
+        pipelines = candidates(self._first, n)
         queries = [(row, encoder.encode_query(span)) for row, span in spans]
         return tune(lambda p, q, k: p.run(self._stages, q, k), queries, pipelines, budget)
 

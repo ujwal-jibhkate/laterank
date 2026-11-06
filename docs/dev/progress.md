@@ -6,12 +6,16 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## Current state
 
 - Milestone **M2: evaluate + tune**. M2-1 (evaluate + `exhaustive`, `826c439`) and M2-2 (label-free
-  `tune` + `set_default`, `8cfae63`) done. No spec approved; next is `/spec M2-3`. M1 complete.
+  `tune` + `set_default`, `8cfae63`) done. M2-3 (validate tune) done: label-free
+  tune **fails** the 0.01 test on all 3 datasets (`docs/dev/tune_validation.md`). Owner's decision
+  (2026-11-05): next spec M2-4 makes tune-with-labels the recommended mode; label-free tune stays,
+  documented as "agrees with MaxSim, may miss BM25, can't beat MaxSim". No spec approved;
+  next is `/spec M2-4`. M1 complete.
   Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded, `ColBERTEncoder` takes `hf_id`).
 - Works: `Index.build(path, docs, encoder)`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`,
   `muvera`, `exhaustive`, each alone or `> maxsim@N`; `index.evaluate(...).table()`;
   `index.tune(Budget(latency_ms=20))` then `index.set_default(report.best)`.
-- Nothing is broken. 378 passed; 24 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
+- Nothing is broken. 381 passed; 24 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
   need `uv sync --extra bge-m3` / `--extra colbert`; 17 SciFact pipeline golden ~8.5 min).
 
 ## M0 checklist
@@ -37,7 +41,9 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 1. Evaluate + `exhaustive` first stage (SciFact `exhaustive` = 0.6991)
 - [x] 2. Label-free `tune` + `set_default`: span queries, exhaustive top-10 as answer key, Pareto
   frontier, `Budget(latency_ms)`
-- [ ] 3. Validate tune on SciFact/NFCorpus/ArguAna against real labels (within 0.01 nDCG@10?)
+- [x] 3. Validate tune on SciFact/NFCorpus/ArguAna against real labels (within 0.01 nDCG@10?):
+  measured, answer **no** on all 3 (worst ArguAna, 0.042: MaxSim itself loses to `dense`)
+- [ ] 4. Tune with labels as the recommended mode (owner's decision after M2-3)
 
 ## Ported from smve-lab
 

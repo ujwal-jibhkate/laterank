@@ -90,3 +90,11 @@ def test_budget_refuses_bad_latency(ms):
         Budget(ms)
     for ok in (20, 0.5, np.float64(20), np.float32(5), 10**400):
         Budget(ok)
+
+
+def test_candidates_is_the_list_index_tune_measures():
+    got = [str(p) for p in tune_mod.candidates({"lexical", "dense", "bm25"}, n_docs=150)]
+    expected = ["exhaustive"]
+    for name in ("bm25", "dense", "lexical"):
+        expected += [name, f"{name} > maxsim@20", f"{name} > maxsim@50", f"{name} > maxsim@100"]
+    assert got == expected

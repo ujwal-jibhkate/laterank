@@ -10,6 +10,7 @@ wins. Only the pipeline's own search is timed (not mapping rows to ids, not scor
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -79,6 +80,7 @@ def evaluate(
     pipelines: Sequence[Pipeline],
     repeats: int,
     dim: int,
+    ignore_identical_ids: bool = False,
 ) -> Evaluation:
     """Run each pipeline on every judged query and score it (see `Index.evaluate`).
 
@@ -86,7 +88,12 @@ def evaluate(
         ValueError: qrels or pipelines is empty, a judged query is missing from `queries`, a
             value isn't an Encoded or has token dim != `dim`, or repeats < 1. All checked before
             any search runs.
+        ValueError: ignore_identical_ids isn't a bool.
     """
+    if not isinstance(ignore_identical_ids, bool):
+        raise ValueError(
+            f"ignore_identical_ids must be True or False, got {ignore_identical_ids!r}"
+        )
     if not qrels:
         raise ValueError("qrels is empty: there is nothing to evaluate")
     if not pipelines:
@@ -109,9 +116,16 @@ def evaluate(
     qids = list(qrels)
     scores = []
     for p in pipelines:
-        k = min(RECALL_K, p.rerankers[-1][1]) if p.rerankers else RECALL_K
-        results, best = _timed_runs(search, p, [queries[qid] for qid in qids], k, repeats)
-        run = {qid: [doc_id(int(r)) for r in c.rows] for qid, c in zip(qids, results, strict=True)}
+        depth = p.rerankers[-1][1] if p.rerankers else math.inf
+        k = min(RECALL_K, depth)
+        ask = min(k + ignore_identical_ids, depth)  # one spare hit to replace the query itself
+        results, best = _timed_runs(search, p, [queries[qid] for qid in qids], ask, repeats)
+        run = {}
+        for qid, c in zip(qids, results, strict=True):
+            ids = [doc_id(r) for r in c.rows.tolist()]
+            if ignore_identical_ids:
+                ids = [d for d in ids if d != qid]
+            run[qid] = ids[:k]
         scores.append(
             Score(
                 str(p),

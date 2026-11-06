@@ -81,3 +81,63 @@ def test_evaluate_refuses_bad_inputs_before_any_search(tmp_path):
         assert calls == [], change
     index.evaluate(queries, qrels, ["exhaustive"], repeats=1)  # the counter does see a good call
     assert len(calls) == len(qrels)
+
+
+def test_ignore_identical_ids_drops_the_query_itself(tmp_path):
+    index, _, _ = _setup(tmp_path, n=150)
+    tokens, offsets = index._stages["exhaustive"].flat, index._stages["exhaustive"].offsets
+    # each query is a document's own tokens, under that document's id: it finds itself first
+    qids = ["d3", "d50", "d120"]
+    queries = {
+        q: Encoded(np.asarray(tokens[offsets[i] : offsets[i + 1]], np.float32), np.ones(4))
+        for q, i in zip(qids, (3, 50, 120), strict=True)
+    }
+    qrels = {q: {q: 1.0, "d0": 1.0} for q in qids}
+    calls = []
+    real = index._stages["exhaustive"]
+
+    class Recording:  # keeps every run's rows, to see what evaluate scored
+        def search(self, q, k):
+            calls.append(real.search(q, k))
+            return calls[-1]
+
+    index._stages["exhaustive"] = Recording()
+    kept = index.evaluate(queries, qrels, ["exhaustive"], repeats=1)
+    assert all(c.rows[0] == i for c, i in zip(calls, (3, 50, 120), strict=True))
+    assert kept.scores[0].ndcg_at_10 > 0.5  # the self-hit counts when kept
+
+    calls.clear()
+    dropped = index.evaluate(queries, qrels, ["exhaustive"], repeats=1, ignore_identical_ids=True)
+    assert all(len(c.rows) == 101 for c in calls)  # one spare hit, so 100 are still scored
+    run = {
+        q: [index._docs[r]["id"] for r in c.rows if index._docs[r]["id"] != q][:100]
+        for q, c in zip(qids, calls, strict=True)
+    }
+    assert all(q not in run[q] and len(run[q]) == 100 for q in qids)
+    assert dropped.scores[0].ndcg_at_10 == mean_metric(run, qrels, ndcg_at_k, 10)
+    assert dropped.scores[0].recall_at_100 == mean_metric(run, qrels, recall_at_k, 100)
+    with pytest.raises(ValueError):
+        index.evaluate(queries, qrels, ["exhaustive"], ignore_identical_ids=1)
+
+
+def test_ignore_identical_ids_never_asks_past_the_rerank_depth(tmp_path):
+    index, _, _ = _setup(tmp_path, n=150)
+    real = index._stages["exhaustive"]
+    q = Encoded(np.asarray(real.flat[real.offsets[7] : real.offsets[8]], np.float32), np.ones(4))
+    asked = []
+
+    class Recording:
+        def search(self, q, k):
+            asked.append(k)
+            return real.search(q, k)
+
+    index._stages["exhaustive"] = Recording()
+    index.evaluate(
+        {"d7": q},
+        {"d7": {"d0": 1.0}},
+        ["exhaustive > maxsim@20"],
+        repeats=1,
+        ignore_identical_ids=True,
+    )
+    # evaluate must cap its ask at the depth: Pipeline.run raises ValueError for k=21 > 20
+    assert asked == [20]
