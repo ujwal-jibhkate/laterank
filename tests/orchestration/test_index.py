@@ -18,11 +18,12 @@ from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.errors import IndexExistsError, IndexFormatError, PipelineSyntaxError
 from laterank.kernels.maxsim import maxsim_scores
 from laterank.kernels.rng import make_anchors
+from laterank.orchestration import evaluate as evaluate_mod
 from laterank.orchestration import index as index_mod
 from laterank.orchestration import tune as tune_mod
 from laterank.orchestration.index import Index
 from laterank.orchestration.pipeline import parse_pipeline
-from laterank.orchestration.tune import Budget, span_queries
+from laterank.orchestration.tune import Budget, candidates, span_queries
 from laterank.storage.manifest import EncoderInfo, read_manifest, write_manifest
 from laterank.storage.segment import write_segment
 
@@ -507,7 +508,7 @@ def test_tune_agreement_matches_a_brute_force_reference(tmp_path, fake_encoder_c
     expected = ["exhaustive"]
     for name in ("dense", "hybrid", "lexical"):
         expected += [name, f"{name} > maxsim@20", f"{name} > maxsim@50"]  # 100+ >= n_docs
-    agreement = {p.pipeline: p.agreement for p in points}
+    agreement = {p.pipeline: p.score for p in points}
     assert [p.pipeline for p in points] == expected
     for p in expected:
         assert agreement[p] == pytest.approx(reference(p), abs=1e-12)
@@ -544,6 +545,113 @@ def test_tune_refuses_bad_inputs_before_any_search(tmp_path, fake_encoder_cls, m
     short, _ = _tune_index(tmp_path / "short", enc, n=12, words=(1, 8))
     with pytest.raises(ValueError, match="none has 8 words"):
         short.tune(budget, encoder=enc)
+
+
+@pytest.fixture
+def fixed_times(monkeypatch):
+    """Every timed search gets a fixed time (exhaustive 1 ms, the others 2, 3, ... ms by order)."""
+    real, order = evaluate_mod._timed_runs, {}
+    seen_repeats = set()
+
+    def timed(search, p, queries, k, repeats):
+        seen_repeats.add(repeats)
+        results, _ = real(search, p, queries, k, repeats)
+        ms = 1.0 if p.first == "exhaustive" else 1.0 + order.setdefault(str(p), len(order) + 1)
+        return results, np.full(len(queries), ms / 1000)
+
+    monkeypatch.setattr(evaluate_mod, "_timed_runs", timed)
+    return seen_repeats
+
+
+def _labels(enc, texts, n=12):
+    """Query q{i} is document i's own text; its only relevant document is d{i+1}."""
+    queries = {f"q{i}": enc.encode_query(texts[i]) for i in range(n)}
+    return queries, {f"q{i}": {f"d{i + 1}": 1.0} for i in range(n)}
+
+
+def test_tune_with_labels_picks_the_best_ndcg_within_budget(
+    tmp_path, fake_encoder_cls, fixed_times
+):
+    enc = fake_encoder_cls()
+    index, texts = _tune_index(tmp_path, enc)
+    queries, qrels = _labels(enc, texts)
+    pipes = candidates(index._first, len(texts))
+    scores = {s.pipeline: s for s in index.evaluate(queries, qrels, pipes, repeats=1).scores}
+
+    for ms in (1e9, 6, 1, 0.5):
+        fixed_times.clear()
+        report = index.tune(Budget(ms), queries=queries, qrels=qrels)
+        assert fixed_times == {3}  # label mode times best of 3, like evaluate's default
+        assert report.metric == "nDCG@10" and report.n_queries == len(qrels)
+        assert "nDCG@10" in report.table().splitlines()[0]
+        for pt in report.frontier:  # each point is evaluate's own number
+            assert (pt.score, pt.p50_ms) == (
+                scores[pt.pipeline].ndcg_at_10,
+                scores[pt.pipeline].p50_ms,
+            )
+        assert [p.p50_ms for p in report.frontier] == sorted(p.p50_ms for p in report.frontier)
+        assert [p.score for p in report.frontier] == sorted({p.score for p in report.frontier})
+        within = [s for s in scores.values() if s.p50_ms <= ms]
+        want = max(within, key=lambda s: (s.ndcg_at_10, -s.p50_ms)).pipeline if within else None
+        assert report.best == want
+    assert report.best is None  # 0.5 ms is below every p50
+
+
+def test_tune_with_labels_passes_ignore_identical_ids_to_evaluate(
+    tmp_path, fake_encoder_cls, fixed_times
+):
+    enc = fake_encoder_cls()
+    index, texts = _tune_index(tmp_path, enc)
+    queries = {f"d{i}": enc.encode_query(texts[i]) for i in range(10)}  # a document as its query
+    qrels = {f"d{i}": {f"d{i + 1}": 1.0} for i in range(10)}
+    for ignore in (False, True):
+        report = index.tune(Budget(1e9), queries=queries, qrels=qrels, ignore_identical_ids=ignore)
+        want = index.evaluate(queries, qrels, ["exhaustive"], ignore_identical_ids=ignore)
+        assert report.frontier[0].pipeline == "exhaustive"  # fastest
+        assert report.frontier[0].score == want.scores[0].ndcg_at_10
+    # the query's own document is the top hit, so dropping it must lift the rank of d{i+1}
+    assert (
+        index.tune(Budget(1e9), queries=queries, qrels=qrels, ignore_identical_ids=True)
+        .frontier[0]
+        .score
+        > index.tune(Budget(1e9), queries=queries, qrels=qrels).frontier[0].score
+    )
+
+
+def test_tune_mode_mixing_is_refused_before_any_search(tmp_path, fake_encoder_cls, monkeypatch):
+    enc = fake_encoder_cls()
+    index, texts = _tune_index(tmp_path, enc)
+    queries, qrels = _labels(enc, texts)
+    for name in ("tune", "tune_with_labels"):
+        monkeypatch.setattr(index_mod, name, lambda *a: pytest.fail("the engine ran"))
+    bad = [
+        ({"queries": queries}, "go together"),
+        ({"qrels": qrels}, "go together"),
+        ({"queries": queries, "qrels": qrels, "encoder": enc}, "encoder only apply"),
+        ({"queries": queries, "qrels": qrels, "n_queries": 5}, "n_queries only apply"),
+        ({"queries": queries, "qrels": qrels, "seed": 0}, "seed only apply"),
+        ({"ignore_identical_ids": True}, "only applies with qrels"),
+    ]
+    for kwargs, match in bad:
+        with pytest.raises(ValueError, match=match):
+            index.tune(Budget(20), **kwargs)
+
+
+def test_tune_with_labels_refuses_what_evaluate_refuses_before_any_search(
+    tmp_path, fake_encoder_cls, monkeypatch
+):
+    enc = fake_encoder_cls()
+    index, texts = _tune_index(tmp_path, enc)
+    queries, qrels = _labels(enc, texts)
+    monkeypatch.setattr(evaluate_mod, "_timed_runs", lambda *a: pytest.fail("a search ran"))
+    bad = [
+        ({"queries": queries, "qrels": {}}, "qrels is empty"),
+        ({"queries": {}, "qrels": qrels}, "missing from `queries`"),
+        ({"queries": queries, "qrels": qrels, "ignore_identical_ids": 1}, "ignore_identical_ids"),
+    ]
+    for kwargs, match in bad:
+        with pytest.raises(ValueError, match=match):
+            index.tune(Budget(20), **kwargs)
 
 
 def test_set_default_writes_the_manifest_and_refuses_bad_pipelines(tmp_path, fake_encoder_cls):

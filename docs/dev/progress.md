@@ -5,17 +5,16 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M2: evaluate + tune**. M2-1 (evaluate + `exhaustive`, `826c439`) and M2-2 (label-free
-  `tune` + `set_default`, `8cfae63`) done. M2-3 (validate tune, `c54d651`) done: label-free
-  tune **fails** the 0.01 test on all 3 datasets (`docs/dev/tune_validation.md`). Owner's decision
-  (2026-11-05): next spec M2-4 makes tune-with-labels the recommended mode; label-free tune stays,
-  documented as "agrees with MaxSim, may miss BM25, can't beat MaxSim". No spec approved;
-  next is `/spec M2-4`. M1 complete.
+- Milestone **M2: evaluate + tune** is complete (M2-1 `826c439`, M2-2 `8cfae63`, M2-3 `c54d651`,
+  M2-4 built, uncommitted until the owner OKs). Label-free tune fails the 0.01 test on all 3
+  datasets (`docs/dev/tune_validation.md`), so tune-with-labels is the recommended mode. No spec
+  approved; next is framing M3 (dataset loader + CLI, deferred from M2). M1 complete.
   Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded, `ColBERTEncoder` takes `hf_id`).
 - Works: `Index.build(path, docs, encoder)`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`,
   `muvera`, `exhaustive`, each alone or `> maxsim@N`; `index.evaluate(...).table()`;
-  `index.tune(Budget(latency_ms=20))` then `index.set_default(report.best)`.
-- Nothing is broken. 381 passed; 24 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
+  `index.tune(Budget(latency_ms=20), queries=q, qrels=qrels)` (recommended) or without labels,
+  then `index.set_default(report.best)`.
+- Nothing is broken. 385 passed; 24 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
   need `uv sync --extra bge-m3` / `--extra colbert`; 17 SciFact pipeline golden ~8.5 min).
 
 ## M0 checklist
@@ -43,7 +42,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
   frontier, `Budget(latency_ms)`
 - [x] 3. Validate tune on SciFact/NFCorpus/ArguAna against real labels (within 0.01 nDCG@10?):
   measured, answer **no** on all 3 (worst ArguAna, 0.042: MaxSim itself loses to `dense`)
-- [ ] 4. Tune with labels as the recommended mode (owner's decision after M2-3)
+- [x] 4. Tune with labels as the recommended mode: `Index.tune(budget, queries=, qrels=)` (owner's decision after M2-3)
 
 ## Ported from smve-lab
 
@@ -64,6 +63,28 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-06 (M2-4: tune with labels)
+- **Done**: drafted, approved, built and closed M2-4 (spec `done`, not yet committed).
+  `Index.tune(budget, queries=, qrels=, ignore_identical_ids=)` runs `tune_with_labels` (new, in
+  `orchestration/tune.py`: `evaluate` with best-of-3 timing, then the shared `_report` frontier
+  and pick). `Point.agreement` -> `score`, `TuneReport.metric` ("agreement" or "nDCG@10"); the
+  rename also touched `scripts/validate_tune.py`. README gained "Choosing a pipeline"; the
+  `Index.tune` docstring carries the label-free caveat. Tests in `tests/orchestration/test_{tune,index}.py`.
+  Reviewer: round 1 "fix first" (3 findings, all fixed), round 2 "merge".
+- **Decisions**: one entry point (owner OK: `Index.tune`, not a method on `Evaluation`). Mixing
+  modes raises (`seed=` with `qrels` is not silently ignored), so `n_queries`/`seed` default to
+  `None`. Label mode times best of 3, label-free stays at 1.
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` still 7). Not done: no noise
+  estimate on the label pick (300 queries can't tell 0.705 from 0.708); listed as skipped in the spec.
+- **Surprises**: my first README/docstring said "up to 0.042" lost; the real worst gap is 0.0524
+  (SciFact below 1 ms), 0.042 is ArguAna above 1 ms (reviewer caught it). My first refusal test
+  patched the engine, so `evaluate`'s own errors (raised inside it) never ran; it is now two tests.
+  BSD `sed -i` needs `''`, so a `sed` tick of the spec failed silently once.
+- **Next**: frame M3 with the owner: the dataset loader (BEIR-style qrels/corpus to plain dicts)
+  and a CLI (`build`, `evaluate`, `tune`, `search`; design doc, plus an encode-time column in
+  `evaluate`). Start with the `researcher` agent on how others load BEIR data and shape a retrieval
+  CLI, then `/spec M3-1`. Also open: the `README` has no install or quick-start yet.
 
 ### 2026-11-06 (M2-3: validate tune against real labels)
 - **Done**: drafted, approved, built, ran and closed M2-3 (`c54d651`). `ignore_identical_ids` on

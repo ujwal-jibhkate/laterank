@@ -15,14 +15,14 @@ from __future__ import annotations
 
 import math
 import numbers
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
 
 from laterank.components.base import Candidates, Encoded
 from laterank.kernels.rng import sample_indices, span_bits
-from laterank.orchestration.evaluate import _timed_runs
+from laterank.orchestration.evaluate import _timed_runs, evaluate
 from laterank.orchestration.pipeline import Pipeline
 
 DEPTHS = (20, 50, 100, 200, 500, 1000)  # rerank depths tried; only those < n_docs
@@ -48,27 +48,41 @@ class Budget:
 @dataclass(frozen=True)
 class Point:
     pipeline: str  # canonical string
-    agreement: float  # mean over queries, in [0, 1]
-    p50_ms: float  # median over queries of one timed search each
+    score: float  # agreement in [0, 1] (label-free) or nDCG@10 (with labels), mean over queries
+    p50_ms: float  # median over queries of one timed search (label-free) or best of 3 (labels)
 
 
 @dataclass(frozen=True)
 class TuneReport:
-    best: str | None  # highest agreement with p50_ms <= budget (ties: faster); None if none fits
-    frontier: tuple[Point, ...]  # Pareto frontier, fastest first, agreement strictly rising
+    best: str | None  # highest score with p50_ms <= budget (ties: faster); None if none fits
+    frontier: tuple[Point, ...]  # Pareto frontier, fastest first, score strictly rising
     n_queries: int
     budget: Budget
+    metric: str  # "agreement" or "nDCG@10": what `score` means
 
     def table(self) -> str:
-        """One line per frontier point (pipeline, agreement, p50 ms), `best` marked with '*'."""
+        """One line per frontier point (pipeline, score, p50 ms), `best` marked with '*'."""
         w = max(len("pipeline"), *(len(p.pipeline) for p in self.frontier))
-        lines = [f"  {'pipeline':<{w}}  {'agreement':>9}  {'p50 ms':>8}"]
+        m = max(len(self.metric), 9)
+        lines = [f"  {'pipeline':<{w}}  {self.metric:>{m}}  {'p50 ms':>8}"]
         lines += [
             f"{'*' if p.pipeline == self.best else ' '} {p.pipeline:<{w}}  "
-            f"{p.agreement:>9.4f}  {p.p50_ms:>8.1f}"
+            f"{p.score:>{m}.4f}  {p.p50_ms:>8.1f}"
             for p in self.frontier
         ]
         return "\n".join(lines)
+
+
+def _report(points: Sequence[Point], budget: Budget, n_queries: int, metric: str) -> TuneReport:
+    """Keep the Pareto frontier of `points`, and pick the best one within the budget."""
+    frontier: list[Point] = []
+    for pt in sorted(points, key=lambda pt: (pt.p50_ms, -pt.score)):
+        if not frontier or pt.score > frontier[-1].score:
+            frontier.append(pt)
+    fits = [pt for pt in frontier if pt.p50_ms <= budget.latency_ms]
+    return TuneReport(
+        fits[-1].pipeline if fits else None, tuple(frontier), n_queries, budget, metric
+    )
 
 
 def span_queries(texts: Sequence[str], n: int, seed: int = 0) -> list[tuple[int, str]]:
@@ -123,9 +137,23 @@ def tune(
         overlap = [len(t & k) / KEY_K for t, k in zip(tops, key, strict=True)]
         points.append(Point(str(p), float(np.mean(overlap)), float(np.median(times)) * 1000))
 
-    frontier: list[Point] = []
-    for pt in sorted(points, key=lambda pt: (pt.p50_ms, -pt.agreement)):
-        if not frontier or pt.agreement > frontier[-1].agreement:
-            frontier.append(pt)
-    fits = [pt for pt in frontier if pt.p50_ms <= budget.latency_ms]
-    return TuneReport(fits[-1].pipeline if fits else None, tuple(frontier), len(queries), budget)
+    return _report(points, budget, len(queries), "agreement")
+
+
+def tune_with_labels(
+    search: Callable[[Pipeline, Encoded, int], Candidates],
+    doc_id: Callable[[int], str],
+    queries: Mapping[str, Encoded],
+    qrels: Mapping[str, Mapping[str, float]],
+    pipelines: Sequence[Pipeline],
+    budget: Budget,
+    dim: int,
+    ignore_identical_ids: bool = False,
+) -> TuneReport:
+    """Score every pipeline with `evaluate` (best of 3 timings) and keep the frontier by nDCG@10.
+
+    Raises what `evaluate` raises, before any search runs.
+    """
+    ev = evaluate(search, doc_id, queries, qrels, pipelines, 3, dim, ignore_identical_ids)
+    points = [Point(s.pipeline, s.ndcg_at_10, s.p50_ms) for s in ev.scores]
+    return _report(points, budget, ev.n_queries, "nDCG@10")

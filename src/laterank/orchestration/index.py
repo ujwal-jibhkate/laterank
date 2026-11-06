@@ -39,6 +39,7 @@ from laterank.orchestration.tune import (
     candidates,
     span_queries,
     tune,
+    tune_with_labels,
 )
 from laterank.storage.manifest import EncoderInfo, Manifest, write_manifest
 from laterank.storage.segment import Segment, open_index, write_segment
@@ -366,28 +367,74 @@ class Index:
         )
 
     def tune(
-        self, budget: Budget, *, encoder: Encoder | None = None, n_queries: int = 500, seed: int = 0
+        self,
+        budget: Budget,
+        *,
+        queries: Mapping[str, Encoded] | None = None,
+        qrels: Mapping[str, Mapping[str, float]] | None = None,
+        ignore_identical_ids: bool = False,
+        encoder: Encoder | None = None,
+        n_queries: int | None = None,
+        seed: int | None = None,
     ) -> TuneReport:
-        """Pick the pipeline that best agrees with exhaustive MaxSim within the budget.
+        """Pick the pipeline for this index within the budget. Both modes try the same candidates:
+        `exhaustive`, every built first stage alone, and every built first stage `> maxsim@d` for
+        d in DEPTHS below n_docs.
 
-        Candidates: `exhaustive`, every built first stage alone, and every built first stage
-        `> maxsim@d` for d in DEPTHS below n_docs. The span's source document is dropped from
-        every result list (each search asks for 11, keeps the first 10 that aren't the source).
-        `encoder` defaults to `load_encoder(self.manifest.encoder)`. See `orchestration/tune.py`.
+        With labels (recommended): give `queries` and `qrels` like `Index.evaluate`; the pick has
+        the highest nDCG@10 within the budget (`ignore_identical_ids` as in `evaluate`).
+
+        Without labels: cuts `n_queries` (default 500) 8-24-word spans out of documents and picks
+        the pipeline whose top 10 best agrees with exhaustive MaxSim's (the span's own document
+        dropped everywhere; `seed` default 0; `encoder` defaults to
+        `load_encoder(self.manifest.encoder)`). Agreeing with MaxSim isn't finding relevant
+        documents: this can't pick a pipeline that beats MaxSim, and it can miss `bm25` (up to
+        0.052 nDCG@10 lost in M2-3, docs/dev/tune_validation.md). See `orchestration/tune.py`.
 
         Raises:
-            ValueError: budget isn't a Budget, n_queries not an int >= 1, seed out of range,
-                fewer than 11 documents, no document has 8 words, `encoder.info !=
-                self.manifest.encoder`, or the index has no loadable encoder and none was
-                given. All checked before any search.
+            ValueError: budget isn't a Budget; only one of `queries`/`qrels` is given; `encoder`,
+                `n_queries` or `seed` is given with `qrels`; `ignore_identical_ids` is given
+                without `qrels`; anything `evaluate` refuses (with labels); n_queries not an
+                int >= 1, seed out of range, fewer than 11 documents, no document has 8 words,
+                `encoder.info != self.manifest.encoder`, or the index has no loadable encoder and
+                none was given (without labels). All checked before any search runs.
         """
         if not isinstance(budget, Budget):
             raise ValueError(f"budget must be a Budget, e.g. Budget(latency_ms=20), got {budget!r}")
+        if (queries is None) != (qrels is None):
+            raise ValueError(
+                "queries and qrels go together: give both (tune with labels) or neither"
+            )
+        n = len(self._docs)
+        if qrels is not None:
+            extra = [
+                name
+                for name, v in (("encoder", encoder), ("n_queries", n_queries), ("seed", seed))
+                if v is not None
+            ]
+            if extra:
+                raise ValueError(
+                    f"{', '.join(extra)} only apply without labels (span queries); "
+                    "drop them, or drop qrels"
+                )
+            return tune_with_labels(
+                lambda p, q, k: p.run(self._stages, q, k),
+                lambda row: self._docs[row]["id"],
+                queries,
+                qrels,
+                candidates(self._first, n),
+                budget,
+                self.manifest.encoder.dim,
+                ignore_identical_ids,
+            )
+        if ignore_identical_ids is not False:
+            raise ValueError("ignore_identical_ids only applies with qrels (tune with labels)")
+        n_queries = 500 if n_queries is None else n_queries
+        seed = 0 if seed is None else seed
         if type(n_queries) is not int or n_queries < 1:  # not bool
             raise ValueError(f"n_queries must be an integer >= 1, got {n_queries!r}")
         if type(seed) is not int or not 0 <= seed < 2**64:
             raise ValueError(f"seed must be an integer in [0, 2**64), got {seed!r}")
-        n = len(self._docs)
         if n <= KEY_K:
             raise ValueError(f"tune needs at least {KEY_K + 1} documents, this index has {n}")
         spans = span_queries([_encoder_text(self._docs[i]) for i in range(n)], n_queries, seed)
@@ -406,8 +453,8 @@ class Index:
                 f"({self.manifest.encoder}): its queries wouldn't match the documents"
             )
         pipelines = candidates(self._first, n)
-        queries = [(row, encoder.encode_query(span)) for row, span in spans]
-        return tune(lambda p, q, k: p.run(self._stages, q, k), queries, pipelines, budget)
+        encoded = [(row, encoder.encode_query(span)) for row, span in spans]
+        return tune(lambda p, q, k: p.run(self._stages, q, k), encoded, pipelines, budget)
 
     def set_default(self, pipeline: str | Pipeline) -> None:
         """Make `pipeline` the default: checked like `search` checks it, then written to the

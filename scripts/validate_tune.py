@@ -165,7 +165,7 @@ def main(name: str, n_queries: int, seed: int) -> None:
     front = {pt.pipeline: pt for pt in report.frontier}
     for s in scores:
         pt = front.get(s.pipeline)
-        tail = f"{pt.agreement:.4f} | {pt.p50_ms:.1f}" if pt else "- | -"
+        tail = f"{pt.score:.4f} | {pt.p50_ms:.1f}" if pt else "- | -"
         head = f"| `{s.pipeline}` | {s.ndcg_at_10:.4f} | {s.recall_at_100:.4f} | {s.p50_ms:.1f}"
         md.append(f"{head} | {tail} |")
     md += ["", "Agreement and span p50 are shown for tune's frontier only.", ""]

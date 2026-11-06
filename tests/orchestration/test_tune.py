@@ -71,12 +71,13 @@ def test_frontier_and_best(fixed_times, ms, best):
     queries = [(10, _query()) for _ in range(4)]
     report = tune(_search, queries, [Pipeline(n) for n in ROWS], Budget(ms))
 
-    assert [(p.pipeline, p.agreement, p.p50_ms) for p in report.frontier] == [
+    assert [(p.pipeline, p.score, p.p50_ms) for p in report.frontier] == [
         ("fast", 0.0, 1.0),
         ("mid", 0.5, 5.0),
         ("exhaustive", 1.0, 50.0),
     ]
     assert report.best == best and report.n_queries == 4 and report.budget == Budget(ms)
+    assert report.metric == "agreement"
     lines = report.table().splitlines()
     assert len(lines) == 4 and lines[0].split() == ["pipeline", "agreement", "p50", "ms"]
     assert [line.startswith("*") for line in lines[1:]] == [
