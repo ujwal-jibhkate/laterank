@@ -6,7 +6,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## Current state
 
 - Milestone **M2: evaluate + tune**. M2-1 (evaluate + `exhaustive`, `826c439`) and M2-2 (label-free
-  `tune` + `set_default`, `8cfae63`) done. M2-3 (validate tune) done: label-free
+  `tune` + `set_default`, `8cfae63`) done. M2-3 (validate tune, `c54d651`) done: label-free
   tune **fails** the 0.01 test on all 3 datasets (`docs/dev/tune_validation.md`). Owner's decision
   (2026-11-05): next spec M2-4 makes tune-with-labels the recommended mode; label-free tune stays,
   documented as "agrees with MaxSim, may miss BM25, can't beat MaxSim". No spec approved;
@@ -64,6 +64,27 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-06 (M2-3: validate tune against real labels)
+- **Done**: drafted, approved, built, ran and closed M2-3 (`c54d651`). `ignore_identical_ids` on
+  `evaluate` / `Index.evaluate` (`orchestration/{evaluate,index}.py`); `candidates()` and
+  `EXHAUSTIVE` moved to `orchestration/tune.py`. `scripts/export_golden_texts.py` also writes
+  `qrels_test.json` (run for all 3 datasets). New `scripts/validate_tune.py`; results in
+  `docs/dev/tune_validation.md`. Reviewer: round 1 "fix first" (2 wrong lines in the skill), round 2 "merge".
+- **Result**: tune fails the 0.01 test everywhere. SciFact worst 0.014 (≥ 1 ms), NFCorpus holds
+  above 1 ms, ArguAna ~0.042 at every budget. Below 1 ms tune picks `lexical`/`dense` over `bm25`.
+- **Decisions**: a script over smve-lab's memmaps, not a test (7 GB, 34–111 min per dataset).
+  Label side uses real-query p50, tune side span p50 (favours tune; noted in spec Changes).
+  Owner: M2-4 makes tune-with-labels the recommended mode; label-free tune stays, documented.
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` still 7).
+- **Surprises**: two causes, not one. (1) BGE-M3 spans favour BGE-M3's own `dense`/`hybrid`, so
+  tune never picks `bm25 > maxsim@d`, the label winner. (2) On ArguAna MaxSim itself (0.4854) loses
+  to `dense` (0.5274), so no agreement-with-MaxSim method can win there. laterank's `bm25` alone
+  runs slightly above smve-lab's (ArguAna +0.0022, cause not found). An ArguAna rerank scores d-1
+  docs when the query is in its top d.
+- **Next**: `/spec M2-4`. Start from design §8's fallback: tune-with-labels = `evaluate` + "best
+  nDCG@10 within budget". Decide with the owner whether it's `Index.tune(budget, qrels=...)` or a
+  method on `Evaluation`, and where label-free tune's caveat is documented.
 
 ### 2026-11-05 (M2-2: label-free tune + set_default)
 - **Done**: drafted, approved, built and closed M2-2 (`8cfae63`). New `orchestration/tune.py`
