@@ -85,7 +85,7 @@ How it fits this repo (these override ponytail where they differ):
 
 - `uv sync` — install core + dev dependencies
 - `uv run pytest` — all tests; golden tests skip themselves unless `LATERANK_GOLDEN_DIR` is set
-- `LATERANK_GOLDEN_DIR=... uv run pytest -m slow` — golden tests only (~8.5 min; SMVE and MUVERA build their indexes)
+- `LATERANK_GOLDEN_DIR=... uv run pytest -m slow` — golden tests only (~8.5 min; SMVE and MUVERA build their indexes; `tests/golden/test_datasets.py` downloads about 9 MB and fails if UKP's host is down)
 - `LATERANK_GOLDEN_DIR=... uv run pytest -m slow -k "not smve and not muvera"` — golden tests without SMVE and MUVERA (~1 min)
 - `uv sync --extra bge-m3` — once, to run the encoder golden tests (they skip without it and the
   cached BGE-M3 weights; run them with `HF_HUB_OFFLINE=1`)

@@ -63,8 +63,8 @@ def test_bottom_layers_stay_light(layer, path):
         )
 
 
-# Leaf modules at the package root that every layer may import: they import only the stdlib.
-LEAF_MODULES = ["errors.py", "_version.py"]
+# Modules that import only the stdlib: the two every layer may import, and the BEIR loader.
+LEAF_MODULES = ["errors.py", "_version.py", "api/datasets.py"]
 
 
 @pytest.mark.parametrize("name", LEAF_MODULES)
