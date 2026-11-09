@@ -5,7 +5,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M2 are complete; on the **M3** checklist, M3-1 (`0a35e76`) and M3-2 CLI (`92fe519`) are done. No spec approved. `92fe519` isn't pushed, so CI hasn't run it.
+- Milestones M0-M2 are complete; on the **M3** checklist, M3-1 (`0a35e76`) and M3-2 CLI (`92fe519`) are done. No spec approved. CI green on all 6 jobs (`27c288e`).
 - Works: `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`.
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 469 passed, 30 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
@@ -41,7 +41,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## M3 checklist
 
 - [x] 1. BEIR dataset loader + `api/` layer: `load_beir`, `download_beir` (`0a35e76`, CI green)
-- [x] 2. CLI: `laterank build`, `search`, `evaluate`, `tune` (`92fe519`, CI not run yet)
+- [x] 2. CLI: `laterank build`, `search`, `evaluate`, `tune` (`92fe519`, CI green)
 
 ## Ported from smve-lab
 
@@ -83,8 +83,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
   the dataset `scifact`. Truthy checks made `tune --dataset "$UNSET"` silently go label-free. One
   Greek letter aborted `search` on a cp1252 stream, and Hugging Face errors ran to 7 lines. A plain
   `uv sync` removed the model extras from the venv.
-- **Next**: push `main` and check CI on all 6 jobs, Windows first (the CLI has only run on macOS).
-  Then frame what's left with the owner: chunking (a spec, or cut from 0.1) and M4 (docs,
+- **Then**: pushed; CI green on all 6 jobs and lint (`27c288e`). AT9 (real model) has only run on macOS.
+- **Next**: frame what's left with the owner: chunking (a spec, or cut from 0.1) and M4 (docs,
   `0.1.0b1`). Also open: `--encoder colbert` accepts non-ColBERT models (M1-7 code, needs its own spec).
 
 ### 2026-11-06 (M2-4: tune with labels)
