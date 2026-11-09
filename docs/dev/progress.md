@@ -5,17 +5,11 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestone **M2: evaluate + tune** is complete (M2-1 `826c439`, M2-2 `8cfae63`, M2-3 `c54d651`,
-  M2-4 built, uncommitted until the owner OKs). Label-free tune fails the 0.01 test on all 3
-  datasets (`docs/dev/tune_validation.md`), so tune-with-labels is the recommended mode. No spec
-  approved; next is framing M3 (dataset loader + CLI, deferred from M2). M1 complete.
-  Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded, `ColBERTEncoder` takes `hf_id`).
-- Works: `Index.build(path, docs, encoder)`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`,
-  `muvera`, `exhaustive`, each alone or `> maxsim@N`; `index.evaluate(...).table()`;
-  `index.tune(Budget(latency_ms=20), queries=q, qrels=qrels)` (recommended) or without labels,
-  then `index.set_default(report.best)`.
-- Nothing is broken. 385 passed; 24 golden skip without `LATERANK_GOLDEN_DIR` (encoder ones also
-  need `uv sync --extra bge-m3` / `--extra colbert`; 17 SciFact pipeline golden ~8.5 min).
+- Milestones M0-M2 are complete; on the **M3** checklist, M3-1 (`0a35e76`) and M3-2 CLI (`92fe519`) are done. No spec approved. `92fe519` isn't pushed, so CI hasn't run it.
+- Works: `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`.
+- Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
+- Nothing is known broken. 469 passed, 30 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
+- Open: chunking and the docs/beta milestone (M4, `0.1.0b1`); the README has a CLI section but no install guide.
 
 ## M0 checklist
 
@@ -47,7 +41,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## M3 checklist
 
 - [x] 1. BEIR dataset loader + `api/` layer: `load_beir`, `download_beir` (`0a35e76`, CI green)
-- [x] 2. CLI: `laterank build`, `search`, `evaluate`, `tune` (M3-2; built, not committed yet)
+- [x] 2. CLI: `laterank build`, `search`, `evaluate`, `tune` (`92fe519`, CI not run yet)
 
 ## Ported from smve-lab
 
@@ -68,6 +62,30 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-08 (M3-2: command line)
+- **Done**: researcher report on CLI shapes (bm25s, tantivy, Pyserini, ir_datasets, llm, colgrep).
+  Drafted, approved, built and closed M3-2 (`92fe519`; `ab6215a` marks M3-1 done, whose session had
+  no log entry). New `api/cli.py`, `api/datasets.py::load_corpus`, `[project.scripts]`,
+  `tests/api/test_cli.py`, golden `tests/golden/test_cli.py`, README "Command line". Reviewer: round
+  1 "fix first" (7 fixed), round 2 "merge" (3 notes, fixed), round 3 "merge" after the `--split` change.
+- **Measured** (SciFact, mxbai at `bb13a29e`, `bm25 > maxsim@100`): nDCG@10 0.7459, Recall@100 0.9249
+  (0.7453 on stored texts), query encoding p50 ~7 ms, one `laterank search` 5.3-6.8 s, nearly all
+  of it startup and model load. First real ColBERT build followed by `Index.open`.
+- **Decisions**: `--encoder` required on `build` only (no hard-coded default). Default pipeline
+  follows the encoder (ColBERT has no `hybrid`), and a pipeline's first stage builds itself.
+  `--dataset` takes a BEIR name or a folder holding `corpus.jsonl`, no `download` command (a name
+  is the explicit request). `--docs` reads BEIR's row shape (`_id`). `build` reads only the corpus,
+  no `--split` (owner). Query encoding is one line, not a column (same number on every row).
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` 9, all older). `cli.py` calls private
+  `Index._pipeline` and `_check_free` to fail before the model loads; make them public if a third appears.
+- **Surprises**: the researcher's "a path wins" rule would let an index folder named `scifact` hide
+  the dataset `scifact`. Truthy checks made `tune --dataset "$UNSET"` silently go label-free. One
+  Greek letter aborted `search` on a cp1252 stream, and Hugging Face errors ran to 7 lines. A plain
+  `uv sync` removed the model extras from the venv.
+- **Next**: push `main` and check CI on all 6 jobs, Windows first (the CLI has only run on macOS).
+  Then frame what's left with the owner: chunking (a spec, or cut from 0.1) and M4 (docs,
+  `0.1.0b1`). Also open: `--encoder colbert` accepts non-ColBERT models (M1-7 code, needs its own spec).
 
 ### 2026-11-06 (M2-4: tune with labels)
 - **Done**: drafted, approved, built and closed M2-4 (spec `done`, not yet committed).
