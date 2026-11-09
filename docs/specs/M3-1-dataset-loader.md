@@ -1,7 +1,7 @@
 ---
 id: M3-1
 title: BEIR dataset loader
-status: approved
+status: done
 approved: 2026-11-06
 ---
 
@@ -100,14 +100,14 @@ one folder named `{name}`. The md5 table, hashed from the downloaded zips and ma
 
 ## Acceptance tests
 
-- [ ] AT1: on a tiny BEIR folder, `load_beir` handles a CRLF header, integer `_id`s (become strings), scores 0 and -1 (dropped), a query judged only in another split (left out), `metadata` (dropped), a missing `title` (`""`), an empty document (kept), and a judged document missing from the corpus (kept in qrels).
-- [ ] AT2: `split="dev"` reads `qrels/dev.tsv`, and `ignore_identical_ids` is True for a folder named `arguana` (also when passed as `"."` from inside it), False otherwise.
-- [ ] AT3: each error in `load_beir`'s Raises list fires, and its message names the file.
-- [ ] AT4: `Index.build` then `Index.evaluate` run on `load_beir`'s output (FakeEncoder).
-- [ ] AT5: with a `file://` URL and a test zip (no network in CI), `download_beir` returns a folder `load_beir` reads; a second call returns it without opening the URL; a wrong md5 raises and leaves `folder` empty, and the next call succeeds; an unknown name raises before opening the URL.
-- [ ] AT6 (golden, slow, real network): after `download_beir` of scifact, nfcorpus and arguana, qrels equal `qrels_test.json` on all three. On nfcorpus and arguana, `_encoder_text` of each document and each query text equal the stored texts by id. `ignore_identical_ids` is True only for arguana.
-- [ ] AT7: `uv run pytest -q`, `ruff check`, `ruff format --check` and `tests/test_layers.py` pass, and `api/datasets.py` imports only the standard library.
-- [ ] AT8: reviewer agent verdict `merge`.
+- [x] AT1: on a tiny BEIR folder, `load_beir` handles a CRLF header, integer `_id`s (become strings), scores 0 and -1 (dropped), a query judged only in another split (left out), `metadata` (dropped), a missing `title` (`""`), an empty document (kept), and a judged document missing from the corpus (kept in qrels).
+- [x] AT2: `split="dev"` reads `qrels/dev.tsv`, and `ignore_identical_ids` is True for a folder named `arguana` (also when passed as `"."` from inside it), False otherwise.
+- [x] AT3: each error in `load_beir`'s Raises list fires, and its message names the file.
+- [x] AT4: `Index.build` then `Index.evaluate` run on `load_beir`'s output (FakeEncoder).
+- [x] AT5: with a `file://` URL and a test zip (no network in CI), `download_beir` returns a folder `load_beir` reads; a second call returns it without opening the URL; a wrong md5 raises and leaves `folder` empty, and the next call succeeds; an unknown name raises before opening the URL.
+- [x] AT6 (golden, slow, real network): after `download_beir` of scifact, nfcorpus and arguana, qrels equal `qrels_test.json` on all three. On nfcorpus and arguana, `_encoder_text` of each document and each query text equal the stored texts by id. `ignore_identical_ids` is True only for arguana.
+- [x] AT7: `uv run pytest -q`, `ruff check`, `ruff format --check` and `tests/test_layers.py` pass, and `api/datasets.py` imports only the standard library.
+- [x] AT8: reviewer agent verdict `merge`.
 
 ## Tasks
 
