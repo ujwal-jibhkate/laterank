@@ -5,7 +5,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M3 are complete; on the **M4** checklist, M4-1 (`042ddbd`, CI green) and M4-3 (CI not yet run) are done. No spec approved.
+- Milestones M0-M3 are complete; on the **M4** checklist, M4-1 (`042ddbd`, CI green) and M4-3 (`4492766`, CI green) are done. No spec approved.
 - Works: `pip install` from the git URL (the README's path, tested in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `ColBERTEncoder` refuses non-ColBERT checkpoints.
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 484 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
@@ -49,7 +49,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 - [x] 1. README install guide + quick-start, top-level imports (`042ddbd`, CI green)
 - [ ] 2. PyPI release: `0.1.0b1`, classifier, empty `rerank`/`pandas` extras
-- [x] 3. `ColBERTEncoder` refuses non-ColBERT checkpoints (spec done, CI not yet run)
+- [x] 3. `ColBERTEncoder` refuses non-ColBERT checkpoints (`4492766`, CI green)
 
 ## Ported from smve-lab
 

@@ -16,7 +16,7 @@ are the settings that won in our measurements on BEIR. It grows out of the resea
 You need Python 3.12 or newer. Pick the extra for the model you want (`colbert` or `bge-m3`):
 
 ```bash
-pip install "laterank[colbert] @ git+https://github.com/ujwal-jibhkate/laterank"
+pip install "laterank[colbert]"
 ```
 
 Either extra brings in torch, which is a large download.
@@ -77,7 +77,7 @@ Without labels, leave both out. Tune then cuts short spans out of your documents
 pipeline that best agrees with exact MaxSim. That measures "agrees with MaxSim", not "finds
 relevant documents": it can't pick a pipeline that beats MaxSim, and it can miss `bm25 > maxsim@d`,
 which sometimes does (SciFact: 0.7086 vs 0.6991 for exact search). Up to 0.052 nDCG@10 was lost
-in our tests (at sub-millisecond budgets; 0.042 above 1 ms); see [docs/dev/tune_validation.md](docs/dev/tune_validation.md).
+in our tests (at sub-millisecond budgets; 0.042 above 1 ms); see [docs/dev/tune_validation.md](https://github.com/ujwal-jibhkate/laterank/blob/main/docs/dev/tune_validation.md).
 
 ## Command line
 
@@ -100,8 +100,8 @@ for many queries use the Python API. Without `--dataset`, `tune` measures agreem
 
 ## Working on laterank
 
-Start with [START_HERE.md](START_HERE.md): the daily workflow, the spec rules, and every command.
+Start with [START_HERE.md](https://github.com/ujwal-jibhkate/laterank/blob/main/START_HERE.md): the daily workflow, the spec rules, and every command.
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](https://github.com/ujwal-jibhkate/laterank/blob/main/LICENSE).

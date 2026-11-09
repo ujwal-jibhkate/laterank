@@ -897,7 +897,7 @@ requires-dist = [
     { name = "sentence-transformers", marker = "extra == 'colbert'", specifier = ">=6.0.0" },
     { name = "tqdm" },
 ]
-provides-extras = ["all", "bge-m3", "colbert", "pandas", "rerank"]
+provides-extras = ["all", "bge-m3", "colbert"]
 
 [package.metadata.requires-dev]
 dev = [
