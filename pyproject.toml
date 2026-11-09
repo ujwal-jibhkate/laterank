@@ -33,6 +33,9 @@ rerank = []
 pandas = []
 all = ["laterank[bge-m3,colbert,rerank,pandas]"]
 
+[project.scripts]
+laterank = "laterank.api.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest",

@@ -111,13 +111,18 @@ def load_beir(folder: str | Path, split: str = "test") -> BeirData:
             f"{qrels_path}: {len(missing)} judged queries aren't in {queries_path}, "
             f"first {missing[0]!r}; fix the files or download them again"
         )
-    corpus = [
-        {"id": doc_id, "title": row.get("title") or "", "text": row["text"]}
-        for doc_id, row in _rows(corpus_path)
-    ]
+    corpus = load_corpus(corpus_path)
     # ponytail: a renamed ArguAna folder loses the rule, add an argument if that bites
     identical = Path(os.path.abspath(folder)).name == "arguana"  # keeps a symlink's own name
     return BeirData(corpus, {query_id: texts[query_id] for query_id in qrels}, qrels, identical)
+
+
+def load_corpus(path: str | Path) -> list[dict[str, str]]:
+    """Read a corpus.jsonl into [{"id", "title", "text"}]. Raises as load_beir does for it."""
+    return [
+        {"id": doc_id, "title": row.get("title") or "", "text": row["text"]}
+        for doc_id, row in _rows(Path(path))
+    ]
 
 
 def download_beir(name: str, folder: str | Path | None = None) -> Path:

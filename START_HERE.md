@@ -85,6 +85,7 @@ uv sync                                   # install everything
 uv run pytest -q                          # all tests (golden tests skip unless the env var is set)
 LATERANK_GOLDEN_DIR=~/Projects/smve-lab/artifacts/embeddings uv run pytest -m slow   # golden tests (~8.5 min)
 LATERANK_GOLDEN_DIR=~/Projects/smve-lab/artifacts/embeddings uv run pytest -m slow -k "not smve and not muvera"  # without SMVE and MUVERA (~1 min)
+LATERANK_GOLDEN_DIR=~/Projects/smve-lab/artifacts/embeddings HF_HUB_OFFLINE=1 uv run pytest tests/golden/test_cli.py -m slow -s  # the real `laterank` command, needs --extra colbert (~1.5 min)
 uv run ruff check . && uv run ruff format --check .                                 # lint
 python3 scripts/specs.py check            # are all specs valid?
 git log --oneline --grep "Spec: M0-2"     # every commit that belongs to one checkpoint

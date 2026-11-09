@@ -91,6 +91,8 @@ How it fits this repo (these override ponytail where they differ):
   cached BGE-M3 weights; run them with `HF_HUB_OFFLINE=1`)
 - `uv sync --extra colbert` — once, to run the ColBERT golden tests (`tests/golden/test_colbert.py`,
   ~1.5 min, downloads two ~134 MB models; `-s` prints the nDCG/size table)
+- `LATERANK_GOLDEN_DIR=... HF_HUB_OFFLINE=1 uv run pytest tests/golden/test_cli.py -m slow -s` —
+  the real `laterank` command on SciFact with mxbai (~1.5 min; needs `--extra colbert`; part of `-m slow`)
 - `cd ~/Projects/smve-lab && uv run python ~/Projects/laterank/scripts/export_golden_texts.py scifact nfcorpus arguana` —
   once per machine: the raw texts the golden `bm25` tests need, plus `qrels_test.json`
 - `LATERANK_GOLDEN_DIR=... HF_HUB_OFFLINE=1 uv run python scripts/validate_tune.py --dataset scifact` —

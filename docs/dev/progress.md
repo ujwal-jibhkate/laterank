@@ -44,6 +44,11 @@ This file is the project's memory between Claude Code sessions. `/start-session`
   measured, answer **no** on all 3 (worst ArguAna, 0.042: MaxSim itself loses to `dense`)
 - [x] 4. Tune with labels as the recommended mode: `Index.tune(budget, queries=, qrels=)` (owner's decision after M2-3)
 
+## M3 checklist
+
+- [x] 1. BEIR dataset loader + `api/` layer: `load_beir`, `download_beir` (`0a35e76`, CI green)
+- [x] 2. CLI: `laterank build`, `search`, `evaluate`, `tune` (M3-2; built, not committed yet)
+
 ## Ported from smve-lab
 
 | smve-lab file | laterank file | what changed |

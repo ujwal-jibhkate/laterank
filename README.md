@@ -36,6 +36,27 @@ relevant documents": it can't pick a pipeline that beats MaxSim, and it can miss
 which sometimes does (SciFact: 0.7086 vs 0.6991 for exact search). Up to 0.052 nDCG@10 was lost
 in our tests (at sub-millisecond budgets; 0.042 above 1 ms); see [docs/dev/tune_validation.md](docs/dev/tune_validation.md).
 
+## Command line
+
+```bash
+uv sync --extra colbert   # or --extra bge-m3
+
+laterank build ./idx --dataset scifact --encoder colbert \
+    --hf-id mixedbread-ai/mxbai-edge-colbert-v0-32m
+laterank search ./idx "statin side effects" -k 5
+laterank evaluate ./idx --dataset scifact --pipeline "bm25 > maxsim@100" --pipeline exhaustive
+laterank tune ./idx --budget-ms 20 --dataset scifact --apply
+```
+
+**Quote your pipelines.** Without quotes, the shell reads `>` as "write the output to a file".
+
+`--dataset` takes a folder holding `corpus.jsonl`, or a BEIR name, which is downloaded the first
+time. To index your own documents, use `--docs FILE` instead: a JSONL file with `_id`, `text` and
+an optional `title` on each line. `--encoder` is required, and `search`, `evaluate` and `tune` read
+the model from the index. Every `search` loads the model again (about 7 s with mxbai on a Mac), so
+for many queries use the Python API. Without `--dataset`, `tune` measures agreement with MaxSim
+(see above).
+
 ## Working on laterank
 
 Start with [START_HERE.md](START_HERE.md): the daily workflow, the spec rules, and every command.
