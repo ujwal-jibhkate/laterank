@@ -66,6 +66,7 @@ How it fits this repo (these override ponytail where they differ):
 
 - Name `laterank`; repo at `~/Projects/laterank`; Apache-2.0; Python 3.12+.
 - Adding/deleting documents in an existing index waits for 0.2.
+- Chunking is cut from 0.1; the README tells users to split long documents before `build`.
 - Tune with labels is the recommended mode; label-free tune stays but is documented as "agrees
   with MaxSim", not "finds relevant documents" (M2-3 measured it failing 0.01 on all 3 datasets).
 - The default encoder (BGE-M3 vs. a small ColBERT model) is decided later by measurement —

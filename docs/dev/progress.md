@@ -5,12 +5,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M2 are complete; on the **M3** checklist, M3-1 (`0a35e76`) and M3-2 CLI (`92fe519`) are done. No spec approved. CI green on all 6 jobs (`27c288e`).
-- Works: `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`.
+- Milestones M0-M3 are complete; on the **M4** checklist, M4-1 (`042ddbd`) is done. No spec approved. CI green on all 6 jobs and lint.
+- Works: `pip install` from the git URL (the README's path, tested in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`.
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 469 passed, 30 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
 - Chunking is cut from 0.1 (owner, 2026-11-08): the README tells users to split long documents before `build`.
-- Open: the docs/beta milestone (M4, `0.1.0b1`). M4-1 (README install + quick-start, top-level imports) is built and committed; AT8 (push, CI, real git URL) is left before `/spec M4-1 done`.
+- Open: `--encoder colbert` accepts non-ColBERT models (needs a spec); M4-2, the PyPI release (`0.1.0b1`).
 
 ## M0 checklist
 
@@ -43,6 +43,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 - [x] 1. BEIR dataset loader + `api/` layer: `load_beir`, `download_beir` (`0a35e76`, CI green)
 - [x] 2. CLI: `laterank build`, `search`, `evaluate`, `tune` (`92fe519`, CI green)
+- [x] Chunking: cut from 0.1 (owner, 2026-11-08)
+
+## M4 checklist
+
+- [x] 1. README install guide + quick-start, top-level imports (`042ddbd`, CI green)
+- [ ] 2. PyPI release: `0.1.0b1`, classifier, empty `rerank`/`pandas` extras
 
 ## Ported from smve-lab
 
@@ -63,6 +69,30 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-08 (M4-1: install guide, quick-start, top-level imports)
+- **Done**: drafted, approved, built and closed M4-1 (`042ddbd`, CI green). `src/laterank/__init__.py`
+  exports five names; `README.md` gained Install and Quick start, lost its "not usable" banner and
+  the checkout-only `uv sync` line, and its tune example now runs as written. Reviewer: "merge", 4
+  low findings fixed. All acceptance tests re-run on the venv installed from the real git URL.
+- **Measured**: README's `pip install` with no cache: 51 s, 1.1 GB. `import laterank`: 0.11 s.
+- **Decisions**: chunking cut from 0.1 (owner; also in CLAUDE.md), the README says to split long
+  documents. Top-level exports (owner), with `load_encoder` added because it is the only way back
+  to an index's pinned model. Install from the git URL until PyPI. No docs site, the README is
+  enough for a beta (differs from the design doc). No new torch test: `test_every_module_imports_with_the_model_libraries_blocked` covers it.
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` still 9).
+- **Surprises**: `Index.build` with no pipeline fails on ColBERT after encoding (its default needs
+  `hybrid`), so the quick-start passes `bm25=True` and a pipeline. A wrong document key or non-string
+  `id` also fails only after encoding; the README now states the rules. The 512-token cut applies
+  to model vectors only, BM25 indexes the full text. `PIPESTATUS` is empty in zsh and
+  `gh run list --commit` needs the full sha; both made my checks report wrongly until re-run.
+- **Not done (reviewer, low)**: a second quick-start run raises `IndexExistsError`; label-free tune
+  needs at least 11 documents; `api/cli.py:34,37` local imports can move to the top; install-hint
+  errors say `pip install "laterank[...]"`, which only works after M4-2.
+- **Next**: `/spec M4-3` (`--encoder colbert` refuses non-ColBERT models, so the beta ships with it).
+  Start by reading `components/colbert.py:60` and checking what a non-ColBERT checkpoint looks like
+  once loaded by `MultiVectorEncoder`. Then `/spec M4-2` (PyPI: classifier, remove the empty
+  `rerank`/`pandas` extras, tag `v0.1.0b1`, swap the README's install line).
 
 ### 2026-11-08 (M3-2: command line)
 - **Done**: researcher report on CLI shapes (bm25s, tantivy, Pyserini, ir_datasets, llm, colgrep).

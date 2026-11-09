@@ -1,7 +1,7 @@
 ---
 id: M4-1
 title: Install guide, quick-start and top-level imports
-status: approved
+status: done
 approved: 2026-11-08
 ---
 
@@ -107,7 +107,7 @@ Each line is one check that can be verified. Tick it (`- [x]`) only when the tes
 - [x] AT5: In the same venv with the venv activated, `laterank build ./cli_idx --docs docs.jsonl --encoder colbert --hf-id <mxbai>`, then `laterank search ./cli_idx "statin side effects" -k 2`, both exit 0 and list hits.
 - [x] AT6: The README matches the Interfaces order, has no `uv sync`, no `laterank.orchestration` import, and states the 512-token cut-off.
 - [x] AT7: `uv run pytest -q`, `uv run ruff check .` and `uv run ruff format --check .` all pass.
-- [ ] AT8: After the owner pushes: CI is green on all 6 jobs, and the README's git URL installs in a new venv and AT1's import works there.
+- [x] AT8: After the owner pushes: CI is green on all 6 jobs, and the README's git URL installs in a new venv and AT1's import works there.
 - [x] AT9: `reviewer` agent verdict is `merge`.
 
 ## Tasks
