@@ -1,12 +1,15 @@
 """Two small ColBERT models on SciFact: do their vectors look right, and how well do they search?
 
 Needs the `colbert` extra (`uv sync --extra colbert`), the models (~134 MB each, downloaded at the
-pinned shas), and the exported texts (`scripts/export_golden_texts.py`). There is no smve-lab
+pinned shas), and the exported texts (`scripts/export_golden_texts.py`). The refusal test also
+reads BGE-M3 at its pinned sha: a 4.3 GB download if it isn't cached. There is no smve-lab
 reference for these models, so the nDCG floor only catches broken vectors (a wrong prefix or a
 missing normalisation craters it). The real numbers are printed: run with `-s` to read them.
 """
 
 import time
+from contextlib import redirect_stderr
+from io import StringIO
 
 import numpy as np
 import pytest
@@ -26,8 +29,23 @@ MODELS = {  # name -> (hf_id, commit sha: `main` on 2026-11-04)
         "bb13a29ec9b1e7edd4ba8f7a0776c48b55cbad66",
     ),
 }
+BGE_M3_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"  # not ColBERT; already cached
 PIPELINE = "bm25 > maxsim@100"
 NDCG_FLOOR = 0.60  # both model cards report about 0.74 for exhaustive search on SciFact
+
+
+def test_the_command_line_refuses_a_non_colbert_model(golden_dir, tmp_path):
+    pytest.importorskip("sentence_transformers", reason="needs the colbert extra")
+    from laterank.api.cli import main
+
+    docs = tmp_path / "corpus.jsonl"
+    docs.write_text('{"_id": "1", "text": "a document"}\n')
+    index = tmp_path / "idx"
+    args = ["build", str(index), "--docs", str(docs), "--encoder", "colbert"]
+    with redirect_stderr(StringIO()) as err:  # not capsys: the import above must see real stderr
+        assert main([*args, "--hf-id", "BAAI/bge-m3", "--revision", BGE_M3_REVISION]) == 1
+    assert "BAAI/bge-m3 is not a ColBERT checkpoint" in err.getvalue()
+    assert not index.exists()
 
 
 @pytest.fixture(scope="module", params=MODELS)

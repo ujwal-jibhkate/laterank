@@ -5,12 +5,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M3 are complete; on the **M4** checklist, M4-1 (`042ddbd`) is done. No spec approved. CI green on all 6 jobs and lint.
-- Works: `pip install` from the git URL (the README's path, tested in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`.
+- Milestones M0-M3 are complete; on the **M4** checklist, M4-1 (`042ddbd`, CI green) and M4-3 (CI not yet run) are done. No spec approved.
+- Works: `pip install` from the git URL (the README's path, tested in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `ColBERTEncoder` refuses non-ColBERT checkpoints.
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
-- Nothing is known broken. 469 passed, 30 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
+- Nothing is known broken. 484 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
 - Chunking is cut from 0.1 (owner, 2026-11-08): the README tells users to split long documents before `build`.
-- Open: `--encoder colbert` accepts non-ColBERT models (needs a spec); M4-2, the PyPI release (`0.1.0b1`).
+- Open: M4-2, the PyPI release (`0.1.0b1`), the last M4 checkpoint.
 
 ## M0 checklist
 
@@ -49,6 +49,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 - [x] 1. README install guide + quick-start, top-level imports (`042ddbd`, CI green)
 - [ ] 2. PyPI release: `0.1.0b1`, classifier, empty `rerank`/`pandas` extras
+- [x] 3. `ColBERTEncoder` refuses non-ColBERT checkpoints (spec done, CI not yet run)
 
 ## Ported from smve-lab
 
@@ -69,6 +70,31 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-08 (M4-3: refuse non-ColBERT models)
+- **Done**: drafted, approved, built and closed M4-3. `components/colbert.py` gains
+  `_is_colbert_checkpoint` and a `ValueError` in `ColBERTEncoder.__init__` (after the download,
+  before the load). Tests: `tests/components/test_colbert.py`, and a golden `laterank build` with
+  real BGE-M3 in `tests/golden/test_colbert.py`. Reviewer: "merge", 2 findings, both fixed (no
+  second pass after the `model_type` fix, recorded in the spec).
+- **Measured**: BGE-M3 loaded twice through `MultiVectorEncoder`: mean cosine -0.09 (mxbai 1.0000).
+  Golden numbers unchanged: answerai 0.7384, mxbai 0.7453, command line 0.7459.
+- **Decisions**: read the checkpoint's files, because loading erases the evidence. Accept
+  `modules.json` with `Dense`, no `Pooling` and an allowed `model_type`, or no `modules.json` with
+  `HF_ColBERT`. `model_type` can only refuse: LightOn's PyLate models have none. The check is in the
+  encoder, so the CLI, `Index.build` users and `load_encoder` all get it. `ForRetrieval` models
+  (ColPali) are refused: text only.
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` still 9). A wrong model still downloads
+  once before the refusal (BGE-M3: 4.3 GB); upgrade: a config-only `snapshot_download` first.
+- **Surprises**: the library adds a random projection and logs it only at `info`. Other surprises:
+  a foreign `model_type` makes it discard the declared modules (reviewer found this). Importing the
+  model libraries under `capsys` leaves transformers logging to a closed stream, so the golden test
+  uses `redirect_stderr`. answerai is cached by sha only (no `refs/main`). Only mxbai, answerai
+  and BGE-M3 were loaded; the other models' rule results come from their config files.
+- **Not done**: the 4.3 GB BGE-M3 note is in the golden test's docstring, not in `CLAUDE.md`.
+- **Next**: owner pushes and confirms CI is green. Then `/spec M4-2`: start by reading
+  `pyproject.toml` (classifiers, the empty `rerank`/`pandas` extras, hatch-vcs version from a tag) and
+  the README's install line, and decide with the owner whether to try TestPyPI before PyPI.
 
 ### 2026-11-08 (M4-1: install guide, quick-start, top-level imports)
 - **Done**: drafted, approved, built and closed M4-1 (`042ddbd`, CI green). `src/laterank/__init__.py`

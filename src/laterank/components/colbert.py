@@ -11,6 +11,7 @@ query expansion and punctuation skiplist; we read them off the loaded model into
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -22,6 +23,31 @@ from laterank.components.base import Encoded
 from laterank.components.bgem3 import _pick_device
 from laterank.components.encoder import EncodedDocs
 from laterank.storage.manifest import EncoderInfo
+
+# for any other model_type, sentence-transformers discards the declared modules
+_KEPT_AS_IS = {None, "SentenceTransformer", "ColBERT", "MultiVectorEncoder"}
+
+
+def _is_colbert_checkpoint(folder: Path) -> bool:
+    """Does this snapshot folder hold trained per-token vectors? Reads files, loads nothing.
+
+    Any other checkpoint loads without complaint: sentence-transformers adds a random projection
+    (different on every load) or reuses a head trained on whole sentences. Loading erases the
+    evidence, so the check reads what the checkpoint declares.
+    """
+    modules = folder / "modules.json"
+    if modules.is_file():
+        declared = json.loads(modules.read_text(encoding="utf-8"))
+        kinds = {m.get("type", "").rsplit(".", 1)[-1] for m in declared}
+        st_config = folder / "config_sentence_transformers.json"
+        settings = json.loads(st_config.read_text(encoding="utf-8")) if st_config.is_file() else {}
+        kept = settings.get("model_type") in _KEPT_AS_IS
+        return kept and "Dense" in kinds and "Pooling" not in kinds
+    config = folder / "config.json"  # no modules.json: only the Stanford format is ColBERT
+    if not config.is_file():
+        return False
+    architectures = json.loads(config.read_text(encoding="utf-8")).get("architectures")
+    return "HF_ColBERT" in (architectures or [])
 
 
 class ColBERTEncoder:
@@ -40,7 +66,7 @@ class ColBERTEncoder:
 
         Raises:
             ImportError: the `colbert` extra isn't installed.
-            ValueError: `revision` isn't a full commit sha.
+            ValueError: `revision` isn't a full commit sha, or `hf_id` isn't a ColBERT checkpoint.
         """
         try:
             from huggingface_hub import snapshot_download
@@ -57,6 +83,13 @@ class ColBERTEncoder:
         folder = Path(
             snapshot_download(hf_id, revision=revision, ignore_patterns=["*.onnx", "onnx/*"])
         )  # named by the commit sha
+        if not _is_colbert_checkpoint(folder):
+            raise ValueError(
+                f"{hf_id} is not a ColBERT checkpoint: it has no trained per-token projection, so "
+                "its token vectors would be meaningless. Use a ColBERT model such as "
+                "mixedbread-ai/mxbai-edge-colbert-v0-32m (BGE-M3 has its own encoder: "
+                "BGEM3Encoder, or --encoder bge-m3)."
+            )
         model = MultiVectorEncoder(str(folder), device=_pick_device(device))
         transformer = model[0]
         mask = next((m for m in model.children() if type(m).__name__ == "MultiVectorMask"), None)
