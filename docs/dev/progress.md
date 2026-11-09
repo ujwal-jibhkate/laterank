@@ -9,7 +9,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - Works: `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`.
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 469 passed, 30 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
-- Open: chunking and the docs/beta milestone (M4, `0.1.0b1`); the README has a CLI section but no install guide.
+- Chunking is cut from 0.1 (owner, 2026-11-08): the README tells users to split long documents before `build`.
+- Open: the docs/beta milestone (M4, `0.1.0b1`). M4-1 (README install + quick-start, top-level imports) is built and committed; AT8 (push, CI, real git URL) is left before `/spec M4-1 done`.
 
 ## M0 checklist
 
