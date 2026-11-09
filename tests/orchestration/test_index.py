@@ -29,6 +29,7 @@ from laterank.storage.segment import write_segment
 
 DIM = 8
 ENCODER = EncoderInfo(name="precomputed", hf_id=None, revision=None, dim=DIM)
+SCORE_REL = 1e-6  # a float32 matmul can round differently at another memory address (macOS)
 
 
 def _data(n=40, seed=0):
@@ -52,7 +53,7 @@ def test_search_matches_the_pipeline_on_in_memory_arrays(tmp_path):
         want = parse_pipeline(spec).run(stages, q, k)
         hits = index.search(q, k, pipeline=spec)
         assert [h.id for h in hits] == [f"d{r}" for r in want.rows]
-        assert [h.score for h in hits] == want.scores.tolist()
+        assert [h.score for h in hits] == pytest.approx(want.scores.tolist(), rel=SCORE_REL)
         assert [h.rank for h in hits] == list(range(1, k + 1))
         r = int(want.rows[0])
         assert (hits[0].text, hits[0].metadata) == (f"text {r}", {"i": r})
@@ -220,7 +221,7 @@ def test_lexical_and_hybrid_match_the_pipeline(tmp_path):
         want = parse_pipeline(spec).run(stages, q, k)
         hits = index.search(q, k, pipeline=spec)
         assert [h.id for h in hits] == [f"d{r}" for r in want.rows]
-        assert [h.score for h in hits] == want.scores.tolist()
+        assert [h.score for h in hits] == pytest.approx(want.scores.tolist(), rel=SCORE_REL)
 
 
 def test_any_scipy_sparse_format_works(tmp_path):
@@ -338,7 +339,7 @@ def test_bm25_matches_the_pipeline(tmp_path):
         want = parse_pipeline(spec).run(stages, q, k)
         hits = index.search(q, k, pipeline=spec)
         assert [h.id for h in hits] == [f"d{r}" for r in want.rows]
-        assert [h.score for h in hits] == want.scores.tolist()
+        assert [h.score for h in hits] == pytest.approx(want.scores.tolist(), rel=SCORE_REL)
 
     plain = Index.create(tmp_path / "plain", docs, (flat, offsets), encoder=ENCODER, dense=dense)
     with pytest.raises(ValueError, match=r"first stages \['dense', 'exhaustive'\]"):
@@ -398,7 +399,7 @@ def test_smve_matches_the_pipeline(tmp_path):
         want = parse_pipeline(spec).run(stages, q, k)
         hits = index.search(q, k, pipeline=spec)
         assert [h.id for h in hits] == [f"d{r}" for r in want.rows]
-        assert [h.score for h in hits] == want.scores.tolist()
+        assert [h.score for h in hits] == pytest.approx(want.scores.tolist(), rel=SCORE_REL)
 
 
 def test_open_refuses_a_damaged_smve_stage(tmp_path):
@@ -442,7 +443,7 @@ def test_muvera_matches_the_pipeline(tmp_path):
         want = parse_pipeline(spec).run(stages, q, k)
         hits = index.search(q, k, pipeline=spec)
         assert [h.id for h in hits] == [f"d{r}" for r in want.rows]
-        assert [h.score for h in hits] == want.scores.tolist()
+        assert [h.score for h in hits] == pytest.approx(want.scores.tolist(), rel=SCORE_REL)
 
 
 def test_open_refuses_a_damaged_muvera_stage(tmp_path):

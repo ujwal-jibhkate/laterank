@@ -25,7 +25,8 @@ would otherwise publish wrongly, and checks the exact files before they leave th
 
 ## Interfaces
 
-No change to `src/` or `tests/`.
+No change to `src/`. In `tests/orchestration/test_index.py`, the five `h.score` comparisons use
+`pytest.approx` (see Changes).
 
 `pyproject.toml`:
 
@@ -97,7 +98,7 @@ needs an account-wide PyPI token. Replace it with a project-scoped one afterward
 
 | # | task | files it owns | depends on | parallel? |
 |---|---|---|---|---|
-| 1 | packaging, README and log edits, `uv lock` (AT1, AT3) | `pyproject.toml`, `uv.lock`, `README.md`, `docs/dev/progress.md` | none | no |
+| 1 | packaging, README and log edits, `uv lock`, the score tolerance (AT1, AT3) | `pyproject.toml`, `uv.lock`, `README.md`, `docs/dev/progress.md`, `tests/orchestration/test_index.py` | none | no |
 | 2 | reviewer (AT7), then commit on the owner's OK; owner pushes, CI (AT2) | none | 1 | no |
 | 3 | owner tags; build and check the files (AT4, AT5) | none (`dist/` is ignored) | 2 | no |
 | 4 | owner uploads and pushes the tag; verify from PyPI (AT6) | none | 3 | no |
@@ -106,3 +107,7 @@ needs an account-wide PyPI token. Replace it with a project-scoped one afterward
 
 - 2026-11-09: `uv publish` names the release files, and the token prompts are spelled out -
   reviewer findings 1 and 2: `dist/*` also takes older builds, and uv asks for a username first.
+- 2026-11-09: the five exact `h.score` comparisons in `test_index.py` get a tolerance (owner OK) -
+  CI failed on `995b92e` (macOS, py3.12): float32 products from Accelerate round differently at
+  different memory addresses (16 outputs from 16 offsets), and these tests compare a memory-mapped
+  index with an in-memory copy. Seen once in 27 CI runs. AT7's `merge` predates this test-only edit.
