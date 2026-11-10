@@ -5,12 +5,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M3 are complete; on the **M4** checklist, M4-1 (`042ddbd`, CI green) and M4-3 (`4492766`, CI green) are done. No spec approved.
-- Works: `pip install` from the git URL (the README's path, tested in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `ColBERTEncoder` refuses non-ColBERT checkpoints.
+- Milestones M0-M4 are complete. `laterank 0.1.0b1` is on PyPI (tag `v0.1.0b1` = `a820d5a`). No spec approved, and no M5 is planned yet.
+- Works: `pip install "laterank[colbert]"` from PyPI (no `--pre`; quick-start checked in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `ColBERTEncoder` refuses non-ColBERT checkpoints.
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 484 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
 - Chunking is cut from 0.1 (owner, 2026-11-08): the README tells users to split long documents before `build`.
-- Open: M4-2, the PyPI release (`0.1.0b1`), the last M4 checkpoint.
+- Known wrong on PyPI until `0.1.0b2`: the 0.1.0b1 page links to `START_HERE.md`, which is now untracked (404).
 
 ## M0 checklist
 
@@ -48,7 +48,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## M4 checklist
 
 - [x] 1. README install guide + quick-start, top-level imports (`042ddbd`, CI green)
-- [ ] 2. PyPI release: `0.1.0b1`, classifier, empty `rerank`/`pandas` extras
+- [x] 2. PyPI release: `0.1.0b1` on PyPI from tag `v0.1.0b1` (`a820d5a`, CI green); Beta classifier, empty `rerank`/`pandas` extras removed
 - [x] 3. `ColBERTEncoder` refuses non-ColBERT checkpoints (`4492766`, CI green)
 
 ## Ported from smve-lab
@@ -70,6 +70,25 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-09 (M4-2: 0.1.0b1 on PyPI)
+- **Done**: drafted, approved, built and closed M4-2. `pyproject.toml` (Beta classifier, Repository
+  URL, `rerank`/`pandas` extras removed, sdist allowlist), `uv.lock`, README (PyPI install line, full
+  GitHub links). Owner tagged `v0.1.0b1` on `a820d5a`, uploaded with `uv publish`, pushed the tag.
+  Verified: twine check, sdist 6 entries, wheel 44 files, clean-venv install, PyPI install + quick-start
+  (doc `a` first, 8.559). Reviewer: "merge" (rehearsed the tag in a throwaway clone).
+- **Also**: `tests/orchestration/test_index.py` score asserts use `pytest.approx(rel=1e-6)`.
+  `START_HERE.md` is now gitignored (owner's local guide); new public `CONTRIBUTING.md`; README's
+  "Working on laterank" became "Contributing"; CLAUDE.md's rule updated to match.
+- **Decisions**: upload by hand, no TestPyPI, no publish workflow yet (add Trusted Publishing at
+  0.1.0). Tag locally, push it only after the upload. Kept the `scipy>=1.15` floor and author email.
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` still 9).
+- **Surprises**: CI failed once on macOS: Apple Accelerate rounds a float32 matmul differently by
+  memory address (1 ULP between a memmap and an in-memory copy). A GitHub Actions outage cost one
+  rerun. scipy 1.15 fails to load on this Mac (1.16.3 works), so the floor may be too low.
+- **Next**: owner deletes the account-wide PyPI token and creates a project-scoped one. Then plan
+  what comes after the beta: list for `0.1.0b2` the PyPI README's dead `START_HERE.md` link and the
+  scipy floor, and draft the next milestone's checklist (0.2 brings add/delete documents).
 
 ### 2026-11-08 (M4-3: refuse non-ColBERT models)
 - **Done**: drafted, approved, built and closed M4-3. `components/colbert.py` gains

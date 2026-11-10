@@ -51,8 +51,9 @@ How it fits this repo (these override ponytail where they differ):
 
 ## Session workflow
 
-- `START_HERE.md` is the owner's guide to working on this repo. Whenever a skill, agent, hook,
-  or command changes, update it in the same commit.
+- `START_HERE.md` is the owner's guide to working on this repo; it is gitignored (local only).
+  Whenever a skill, agent, hook, or command changes, update it in the same session.
+  `CONTRIBUTING.md` is the public guide: update it when setup, test commands or code rules change.
 
 - `docs/dev/progress.md` records where the project stands between sessions. Read it before
   starting work, and keep it current.

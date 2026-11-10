@@ -1,7 +1,7 @@
 ---
 id: M4-2
 title: PyPI beta release
-status: approved
+status: done
 approved: 2026-11-09
 ---
 
@@ -79,20 +79,20 @@ needs an account-wide PyPI token. Replace it with a project-scoped one afterward
 
 ## Acceptance tests
 
-- [ ] AT1: `pyproject.toml` matches Interfaces and `uv lock --check` passes.
-- [ ] AT2: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass, and CI is
+- [x] AT1: `pyproject.toml` matches Interfaces and `uv lock --check` passes.
+- [x] AT2: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass, and CI is
   green on all 6 jobs and lint for the commit to be tagged.
-- [ ] AT3: the README has no `git+` install line and no relative links.
-- [ ] AT4: from the tag, `dist/` holds exactly `laterank-0.1.0b1.tar.gz` and
+- [x] AT3: the README has no `git+` install line and no relative links.
+- [x] AT4: from the tag, `dist/` holds exactly `laterank-0.1.0b1.tar.gz` and
   `laterank-0.1.0b1-py3-none-any.whl`; `twine check` passes; the sdist has only `src/`, `README.md`,
   `LICENSE`, `pyproject.toml`, `PKG-INFO`, `.gitignore`; the metadata says Beta and has no
   `pandas` or `rerank` extra.
-- [ ] AT5: in a new venv outside the repo, the built wheel installs with no extras; `laterank.__version__`
+- [x] AT5: in a new venv outside the repo, the built wheel installs with no extras; `laterank.__version__`
   is `0.1.0b1` and `laterank --help` exits 0.
-- [ ] AT6: after the upload, in a new venv outside the repo, the README's install line (no `--pre`)
+- [x] AT6: after the upload, in a new venv outside the repo, the README's install line (no `--pre`)
   installs `0.1.0b1`, the quick-start copied unchanged ranks doc `a` first, and PyPI's JSON for
   the release has the README text and the Repository link.
-- [ ] AT7: the `reviewer` agent returns `merge` (it runs before the tag; see Tasks).
+- [x] AT7: the `reviewer` agent returns `merge` (it runs before the tag; see Tasks).
 
 ## Tasks
 

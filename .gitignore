@@ -25,6 +25,9 @@ htmlcov/
 *.npz
 !tests/fixtures/**/*.npy
 
+# The owner's local workflow guide (contributors read CONTRIBUTING.md)
+START_HERE.md
+
 # Claude Code personal settings (team settings in .claude/ are committed)
 .claude/settings.local.json
 .wheelhouse/

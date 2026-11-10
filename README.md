@@ -98,9 +98,9 @@ the model from the index. Every `search` loads the model again (about 7 s with m
 for many queries use the Python API. Without `--dataset`, `tune` measures agreement with MaxSim
 (see above).
 
-## Working on laterank
+## Contributing
 
-Start with [START_HERE.md](https://github.com/ujwal-jibhkate/laterank/blob/main/START_HERE.md): the daily workflow, the spec rules, and every command.
+See [CONTRIBUTING.md](https://github.com/ujwal-jibhkate/laterank/blob/main/CONTRIBUTING.md): setup, tests, and the rules the code follows.
 
 ## License
 
