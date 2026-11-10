@@ -5,12 +5,12 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M4 are complete. `laterank 0.1.0b1` is on PyPI (tag `v0.1.0b1` = `a820d5a`). No spec approved. M5 is planned (checklist below).
-- Works: `pip install "laterank[colbert]"` from PyPI (no `--pre`; quick-start checked in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `ColBERTEncoder` refuses non-ColBERT checkpoints.
+- Milestones M0-M4 complete; M5-1 done: `laterank 0.1.0b2` is on PyPI (tag `v0.1.0b2` = `4587cdf`). No spec approved; next is M5-2 (0.2 add/delete design).
+- Works: `pip install "laterank[colbert]"` from PyPI (no `--pre`; quick-start checked in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`.
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 484 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
+- Dependency floors `numpy>=2.2`, `scipy>=1.16` are tested in CI (`test-floor` job, 3 OS).
 - Chunking is cut from 0.1 (owner, 2026-11-08): the README tells users to split long documents before `build`.
-- Known wrong on PyPI until `0.1.0b2`: the 0.1.0b1 page links to `START_HERE.md`, which is now untracked (404).
 
 ## M0 checklist
 
@@ -53,7 +53,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## M5 checklist
 
-- [ ] 1. `0.1.0b2`: test the `scipy` floor (raise it if 1.15 is broken), release so the PyPI page loses the dead `START_HERE.md` link (already fixed in the repo's README)
+- [x] 1. `0.1.0b2` (`4587cdf`, CI green, on PyPI): test the `scipy` floor (raise it if 1.15 is broken), release so the PyPI page loses the dead `START_HERE.md` link (already fixed in the repo's README)
 - [ ] 2. 0.2 design: how `add` and `delete` change an index (segments, deletes, BM25 statistics, crash safety), from `docs/dev/add_delete_research.md`. Owner chose option A (rewrite into one new segment, 2026-11-10); measure a SciFact BGE-M3 rewrite first
 - [ ] 3. `Index.add` (new documents in a new segment)
 - [ ] 4. `Index.delete` (and how deleted documents leave search results)
@@ -78,6 +78,30 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-10 (M5-1: 0.1.0b2 on PyPI)
+- **Done**: M5 checklist written. Researcher report on add/delete saved as
+  `docs/dev/add_delete_research.md`. Drafted, approved, built and closed M5-1 (`4587cdf`):
+  `pyproject.toml` floor `scipy>=1.16`, `uv.lock`, new `test-floor` CI job (numpy 2.2.0 +
+  scipy 1.16.0, 3 OS, asserts the loaded versions first), one line in `CONTRIBUTING.md`. Owner
+  tagged `v0.1.0b2`, uploaded, pushed the tag. Verified: twine check, sdist 6 entries, metadata
+  `scipy>=1.16`, PyPI install + quick-start (doc `a` first, 8.559), no `START_HERE` on PyPI.
+  Reviewer: "merge", 2 low findings, both fixed (spec Changes).
+- **Decisions**: raise the scipy floor (1.15 is broken on macOS 27, a floor only matters to people
+  who already have the old version). Test floors with `uv run --with` exact pins, not
+  `--resolution lowest-direct` (that also drags `PyStemmer`/`tqdm` to pre-3.12 releases). 0.2
+  add/delete uses option A, rewrite into one new segment (owner): exact match with a fresh build,
+  reuses the atomic manifest swap; option B's `compact()` is option A, so nothing is thrown away.
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` still 9).
+- **Surprises**: scipy 1.15's `_spropack` fails to load on macOS 27.0.1 (loader rejects its
+  `__thread_bss` section); 1.16.0 works; CI's macOS runners are older, so CI can't catch it. SMVE's
+  `smve/center.npy` is corpus-wide too (design doc says only BM25 is). uv doesn't log `--with`
+  installs, hence the version assert. The first PyPI install after upload got b1 (CDN lag); a
+  minute later b2. Docker daemon was not running, so 1.15 on Linux is untested.
+- **Next**: `/spec M5-2` (add/delete design, option A). First step: time a full rewrite of the
+  SciFact BGE-M3 index from its stored arrays (read `orchestration/index.py::Index.build` and
+  `storage/segment.py::write_segment`, call them on the stored token vectors, no re-encoding), and
+  decide with the owner whether that time is acceptable before writing Interfaces.
 
 ### 2026-11-09 (M4-2: 0.1.0b1 on PyPI)
 - **Done**: drafted, approved, built and closed M4-2. `pyproject.toml` (Beta classifier, Repository

@@ -1,7 +1,7 @@
 ---
 id: M5-1
 title: 0.1.0b2 release
-status: approved
+status: done
 approved: 2026-11-10
 ---
 
@@ -80,11 +80,11 @@ uploads in their own terminal with the project-scoped token, and pushes the tag 
 ## Acceptance tests
 
 - [x] AT1: `pyproject.toml` says `scipy>=1.16` and `uv lock --check` passes.
-- [ ] AT2: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass, and CI is
+- [x] AT2: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass, and CI is
   green on all jobs, including the 3 `test-floor` jobs, for the commit to be tagged.
-- [ ] AT3: from the tag, `dist/` holds exactly the `0.1.0b2` sdist and wheel, `twine check` passes,
+- [x] AT3: from the tag, `dist/` holds exactly the `0.1.0b2` sdist and wheel, `twine check` passes,
   and the wheel's metadata says `scipy>=1.16`.
-- [ ] AT4: after the upload, in a new venv outside the repo, `pip install "laterank[colbert]"`
+- [x] AT4: after the upload, in a new venv outside the repo, `pip install "laterank[colbert]"`
   installs `0.1.0b2`, the quick-start ranks doc `a` first, and PyPI's JSON description has no
   `START_HERE` text.
 - [x] AT5: the `reviewer` agent returns `merge` (before the tag).
