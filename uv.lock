@@ -892,7 +892,7 @@ requires-dist = [
     { name = "flagembedding", marker = "extra == 'bge-m3'", specifier = ">=1.4.2" },
     { name = "numpy", specifier = ">=2.2" },
     { name = "pystemmer" },
-    { name = "scipy", specifier = ">=1.15" },
+    { name = "scipy", specifier = ">=1.16" },
     { name = "sentence-transformers", marker = "extra == 'all'", specifier = ">=6.0.0" },
     { name = "sentence-transformers", marker = "extra == 'colbert'", specifier = ">=6.0.0" },
     { name = "tqdm" },

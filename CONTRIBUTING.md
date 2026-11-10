@@ -37,6 +37,8 @@ the maintainer runs them before merging anything that could change results.
 - Public functions validate their inputs and raise a clear `ValueError` or `TypeError`.
 - New behaviour comes with a test. Kernels keep their naive-loop reference tests.
 - The least code that works: prefer the standard library, numpy and scipy over a new dependency.
+- Raising the `numpy` or `scipy` floor in `pyproject.toml` means changing the pins in CI's
+  `test-floor` job too, so CI keeps testing the oldest versions we allow.
 
 ## Pull requests
 

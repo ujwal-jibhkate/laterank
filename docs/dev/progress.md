@@ -5,7 +5,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M4 are complete. `laterank 0.1.0b1` is on PyPI (tag `v0.1.0b1` = `a820d5a`). No spec approved, and no M5 is planned yet.
+- Milestones M0-M4 are complete. `laterank 0.1.0b1` is on PyPI (tag `v0.1.0b1` = `a820d5a`). No spec approved. M5 is planned (checklist below).
 - Works: `pip install "laterank[colbert]"` from PyPI (no `--pre`; quick-start checked in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune` (`api/cli.py`); `load_beir`/`download_beir`; `Index.build`, `evaluate`, `tune`, `set_default`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `ColBERTEncoder` refuses non-ColBERT checkpoints.
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 484 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
@@ -50,6 +50,14 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 1. README install guide + quick-start, top-level imports (`042ddbd`, CI green)
 - [x] 2. PyPI release: `0.1.0b1` on PyPI from tag `v0.1.0b1` (`a820d5a`, CI green); Beta classifier, empty `rerank`/`pandas` extras removed
 - [x] 3. `ColBERTEncoder` refuses non-ColBERT checkpoints (`4492766`, CI green)
+
+## M5 checklist
+
+- [ ] 1. `0.1.0b2`: test the `scipy` floor (raise it if 1.15 is broken), release so the PyPI page loses the dead `START_HERE.md` link (already fixed in the repo's README)
+- [ ] 2. 0.2 design: how `add` and `delete` change an index (segments, deletes, BM25 statistics, crash safety), from `docs/dev/add_delete_research.md`. Owner chose option A (rewrite into one new segment, 2026-11-10); measure a SciFact BGE-M3 rewrite first
+- [ ] 3. `Index.add` (new documents in a new segment)
+- [ ] 4. `Index.delete` (and how deleted documents leave search results)
+- [ ] 5. CLI `laterank add` / `laterank delete`, README, `0.2.0` release
 
 ## Ported from smve-lab
 

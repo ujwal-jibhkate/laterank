@@ -20,7 +20,7 @@ classifiers = [
 # Core stays numpy/scipy only: kernels/ and storage/ must never need torch.
 dependencies = [
     "numpy>=2.2",
-    "scipy>=1.15",
+    "scipy>=1.16",
     "PyStemmer",
     "tqdm",
 ]
