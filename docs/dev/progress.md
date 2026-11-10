@@ -86,8 +86,9 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - **Surprises**: CI failed once on macOS: Apple Accelerate rounds a float32 matmul differently by
   memory address (1 ULP between a memmap and an in-memory copy). A GitHub Actions outage cost one
   rerun. scipy 1.15 fails to load on this Mac (1.16.3 works), so the floor may be too low.
-- **Next**: owner deletes the account-wide PyPI token and creates a project-scoped one. Then plan
-  what comes after the beta: list for `0.1.0b2` the PyPI README's dead `START_HERE.md` link and the
+- **Token**: the account-wide PyPI token used for the first upload is deleted; future uploads use a
+  token scoped to the `laterank` project (owner, 2026-11-09).
+- **Next**: plan what comes after the beta: list for `0.1.0b2` the PyPI README's dead `START_HERE.md` link and the
   scipy floor, and draft the next milestone's checklist (0.2 brings add/delete documents).
 
 ### 2026-11-08 (M4-3: refuse non-ColBERT models)
