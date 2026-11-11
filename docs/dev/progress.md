@@ -5,8 +5,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 done (`Index.add` + `Index.delete`, `96992dc`, CI green on all 10 jobs). M5-3 approved and built, not committed (CLI `add`/`delete`, README, `0.2.0`).
-- Works: `pip install "laterank[colbert]"` from PyPI; `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`. In `main` only: `index.add(docs, encoder)`, `index.delete(ids)` (whole-index rewrite, equals a fresh build).
+- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 done (`Index.add` + `Index.delete`, `96992dc`, CI green on all 10 jobs). M5-3 done (`laterank 0.2.0` on PyPI, tag `v0.2.0` on `89655c2`). M5 complete; no spec approved.
+- Works: `pip install "laterank[colbert]"` from PyPI (0.2.0); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `add`, `delete`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `index.add(docs, encoder)`, `index.delete(ids)` (whole-index rewrite, equals a fresh build).
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 496 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
 - Dependency floors `numpy>=2.2`, `scipy>=1.16` are tested in CI (`test-floor` job, 3 OS).
@@ -55,7 +55,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 - [x] 1. `0.1.0b2` (`4587cdf`, CI green, on PyPI): test the `scipy` floor (raise it if 1.15 is broken), release so the PyPI page loses the dead `START_HERE.md` link (already fixed in the repo's README)
 - [x] 2. `Index.add` + `Index.delete` (`96992dc`, CI green) (option A: rewrite into one new segment; SciFact BGE-M3 rewrite measured at 354 s, SMVE 318 s; owner accepted the cost, 2026-11-10)
-- [ ] 3. CLI `laterank add` / `laterank delete`, README, `0.2.0` release
+- [x] 3. CLI `laterank add` / `laterank delete`, README, `0.2.0` release (`89655c2`, CI green, tag `v0.2.0`, on PyPI)
 
 ## Ported from smve-lab
 
@@ -77,16 +77,31 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Log
 
-### 2026-11-10 (M5-3: CLI add/delete, README, 0.2.0) - in progress
-- **Done so far**: drafted and approved M5-3 (`docs/specs/M5-3-cli-add-delete.md`; owner chose
-  `0.2.0`). Built `laterank add INDEX --docs FILE` and `laterank delete INDEX ID...`
-  (`api/cli.py`), 6 new tests in `tests/api/test_cli.py` (help test renamed), README section "Adding and deleting
-  documents", banner "Beta ... before 1.0", `Index.add` docstring timing fixed. Reviewer round 1:
-  "fix first", 8 findings, all fixed or recorded as Skipped (spec Changes).
-- **AT5 measured** (SciFact, mxbai at `bb13a29e`, `bm25 > maxsim@100`, this Mac): build 64 s;
-  evaluate nDCG@10 0.7459, R@100 0.9249; `add` of 2 docs 4.5 s (model load included); search ranks
-  the new doc #1; `delete` of both 0.9 s (no model load); segment files byte-identical to the first
-  build; evaluate again 0.7459 / 0.9249.
+### 2026-11-11 (M5-3: CLI add/delete, README, 0.2.0 on PyPI)
+- **Done**: drafted, approved, built and closed M5-3 (`docs/specs/M5-3-cli-add-delete.md`).
+  `laterank add INDEX --docs FILE` and `laterank delete INDEX ID...` (`api/cli.py`), 6 new tests in
+  `tests/api/test_cli.py` (help test renamed), README section "Adding and deleting documents",
+  banner "Beta ... before 1.0", `Index.add` docstring timing fixed. Committed `89655c2`, CI green on
+  all 10 jobs; owner tagged `v0.2.0`, uploaded, pushed the tag. Reviewer: round 1 "fix first"
+  (8 findings: 6 fixed, 2 became Skipped lines), round 2 "merge" (3 nits, fixed).
+- **Measured** (AT5, SciFact, mxbai at `bb13a29e`, `bm25 > maxsim@100`, this Mac): build 64 s;
+  nDCG@10 0.7459, R@100 0.9249; `add` of 2 docs 4.5 s incl. model load, new doc ranks #1; `delete`
+  0.9 s, no model load; segment files byte-identical to the first build; 0.7459 / 0.9249 again.
+  From PyPI in a fresh venv: 0.2.0 installs, quick-start ranks `a` first (8.559), `add --help` runs.
+- **Decisions**: version `0.2.0` final (owner): 0.1.0 final never ships, README says Beta until
+  1.0, Beta classifier stays (also in CLAUDE.md). `add` reads only `--docs` and the manifest's model
+  (`Index.add` refuses any other). `delete` takes ids as arguments (`--` before an id starting
+  `-`). The printed total comes from `manifest.segments[0].documents`, so `cli.py` gains no third
+  private access. Skipped (spec Out of scope): `add --dataset`, `delete --ids FILE`, checking docs
+  before the model loads, an add-specific message for precomputed indexes, Trusted Publishing.
+- **Shortcuts with a ceiling**: none added (`grep ponytail:` still 10).
+- **Surprises**: M5-2's docstring said "about 10 s without SMVE"; it is 36 s (MUVERA is 26 s), 10 s
+  is without both. My README said only "another program" must reopen; a second `Index` in the same
+  program breaks too (reviewer reproduced the `FileNotFoundError`). The first PyPI install after
+  the upload got 0.1.0b2 even with `uv --refresh` (PyPI's CDN); `--no-cache` got 0.2.0.
+- **Next**: frame M6 with the owner. Start with `/ponytail-debt` (10 markers) and the Skipped lines
+  in the M5-1..M5-3 specs, next to the design doc's §11 step "beta testing: outside users try it";
+  pick 1-3 items with the owner, then `/spec M6-1`.
 
 ### 2026-11-10 (M5-2: Index.add + Index.delete)
 - **Done**: measured a full SciFact BGE-M3 rewrite from stored arrays: 354 s (SMVE 318, MUVERA 26,

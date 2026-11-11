@@ -66,9 +66,12 @@ How it fits this repo (these override ponytail where they differ):
 ## Fixed decisions
 
 - Name `laterank`; repo at `~/Projects/laterank`; Apache-2.0; Python 3.12+.
-- Adding/deleting documents in an existing index waits for 0.2. Design (owner, 2026-11-10): each
-  `add`/`delete` rewrites the index into one new segment, so results match a fresh build exactly.
-  Other open `Index` objects on the folder must reopen afterwards (the old segment is deleted).
+- Adding/deleting documents shipped in 0.2.0 (`Index.add`/`delete`, `laterank add`/`delete`).
+  Design (owner, 2026-11-10): each `add`/`delete` rewrites the index into one new segment, so
+  results match a fresh build exactly. Other open `Index` objects on the folder must reopen
+  afterwards (the old segment is deleted).
+- Versions (owner, 2026-11-10): 0.2.0 is a final release; 0.1.0 final never shipped. The README
+  says Beta and the API may change until 1.0; the Beta classifier stays.
 - Chunking is cut from 0.1; the README tells users to split long documents before `build`.
 - Tune with labels is the recommended mode; label-free tune stays but is documented as "agrees
   with MaxSim", not "finds relevant documents" (M2-3 measured it failing 0.01 on all 3 datasets).

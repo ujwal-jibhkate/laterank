@@ -1,7 +1,7 @@
 ---
 id: M5-3
 title: laterank add / delete, README, 0.2.0
-status: approved
+status: done
 approved: 2026-11-10
 ---
 
@@ -106,9 +106,9 @@ Tests in `tests/api/test_cli.py`, with the existing fake encoder (no model, no n
 - [x] AT5 (manual, numbers recorded in the log): on a real SciFact index (mxbai, `bm25 > maxsim@100`),
   `add` 2 documents, `search` finds one, `delete` them, then `evaluate` prints nDCG@10 0.7459 again
   (M5-2 proved delete-after-add equals the original build byte for byte).
-- [ ] AT6: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass; CI is
+- [x] AT6: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass; CI is
   green on every job for the commit to be tagged.
-- [ ] AT7: from the tag, `dist/` holds exactly the `0.2.0` sdist and wheel and `twine check`
+- [x] AT7: from the tag, `dist/` holds exactly the `0.2.0` sdist and wheel and `twine check`
   passes. After the upload, in a new venv outside the repo, `pip install "laterank[colbert]"`
   installs `0.2.0`, the quick-start ranks doc `a` first, and `laterank add --help` runs.
 - [x] AT8: the `reviewer` agent returns `merge` (before the tag).
