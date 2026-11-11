@@ -5,7 +5,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 (`Index.add` + `Index.delete`) approved and built, reviewer "merge"; waits for commit + CI (AT7), then `/spec M5-2 done`.
+- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 done (`Index.add` + `Index.delete`, `96992dc`, CI green on all 10 jobs). No spec approved; next is M5-3 (CLI `add`/`delete`, README, `0.2.0`).
 - Works: `pip install "laterank[colbert]"` from PyPI; `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`. In `main` only: `index.add(docs, encoder)`, `index.delete(ids)` (whole-index rewrite, equals a fresh build).
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 490 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
@@ -54,7 +54,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## M5 checklist
 
 - [x] 1. `0.1.0b2` (`4587cdf`, CI green, on PyPI): test the `scipy` floor (raise it if 1.15 is broken), release so the PyPI page loses the dead `START_HERE.md` link (already fixed in the repo's README)
-- [ ] 2. `Index.add` + `Index.delete` (option A: rewrite into one new segment; SciFact BGE-M3 rewrite measured at 354 s, SMVE 318 s; owner accepted the cost, 2026-11-10)
+- [x] 2. `Index.add` + `Index.delete` (`96992dc`, CI green) (option A: rewrite into one new segment; SciFact BGE-M3 rewrite measured at 354 s, SMVE 318 s; owner accepted the cost, 2026-11-10)
 - [ ] 3. CLI `laterank add` / `laterank delete`, README, `0.2.0` release
 
 ## Ported from smve-lab
@@ -97,8 +97,9 @@ This file is the project's memory between Claude Code sessions. `/start-session`
   references kept the old segment's memmaps open, so on Windows the old folder would never have
   been deleted (reviewer; fixed with `del tok`, measured 0 of 13 memmaps alive, Windows not run).
   My first refactor edit left a duplicate block in `index.py`; fixed before any test ran.
-- **Next**: owner commits (`Spec: M5-2`) and pushes; when CI is green on all jobs (Windows checks
-  the old-folder delete for real), tick AT7 and run `/spec M5-2 done`. Then `/spec M5-3`: start by
+- **Then**: committed `96992dc`, pushed, CI green on all 10 jobs (both Windows jobs ran the
+  old-folder delete for real). AT7 ticked, spec marked done.
+- **Next**: `/spec M5-3`: start by
   reading `src/laterank/api/cli.py` (`build`'s arguments) and decide with the owner how
   `laterank add` takes documents (`--docs` JSONL like `build`?) and gets the encoder
   (`load_encoder(index.manifest.encoder)`).

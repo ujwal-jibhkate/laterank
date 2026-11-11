@@ -1,7 +1,7 @@
 ---
 id: M5-2
 title: Index.add and Index.delete
-status: approved
+status: done
 approved: 2026-11-10
 ---
 
@@ -116,7 +116,7 @@ manifests equal apart from the segment id.
 - [x] AT5: a failure inside `write_manifest` (monkeypatched) leaves the old index opening with the
   old documents, and the next `add` succeeds despite the stray segment folder.
 - [x] AT6: `create` behaves as before after `_stage_arrays` is extracted (existing tests pass).
-- [ ] AT7: `uv run pytest -q` and `uv run ruff check . && uv run ruff format --check .` pass; CI green.
+- [x] AT7: `uv run pytest -q` and `uv run ruff check . && uv run ruff format --check .` pass; CI green.
 - [x] AT8: reviewer verdict `merge`.
 
 ## Tasks
