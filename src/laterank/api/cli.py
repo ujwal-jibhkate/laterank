@@ -1,4 +1,4 @@
-"""The `laterank` command: build, search, evaluate, tune.
+"""The `laterank` command: build, add, delete, search, evaluate, tune.
 
 Each command wraps `Index`. The one thing it adds is turning query text into vectors, with the
 encoder the index records. Results go to stdout; notices and progress bars go to stderr.
@@ -88,6 +88,27 @@ def _build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add(args: argparse.Namespace) -> int:
+    index = Index.open(args.index)  # a bad folder fails first
+    docs = load_corpus(args.docs)  # a missing file or bad JSON fails before the model loads
+    index.add(docs, load_encoder(index.manifest.encoder))
+    print(
+        f"added {len(docs)} documents to {args.index}: "
+        f"{index.manifest.segments[0].documents} in total"
+    )
+    return 0
+
+
+def _delete(args: argparse.Namespace) -> int:  # never loads the model
+    index = Index.open(args.index)
+    index.delete(args.ids)
+    print(
+        f"deleted {len(set(args.ids))} documents from {args.index}: "
+        f"{index.manifest.segments[0].documents} in total"
+    )
+    return 0
+
+
 def _search(args: argparse.Namespace) -> int:
     index = Index.open(args.index)
     # checked before the model loads
@@ -160,6 +181,18 @@ def _parser() -> argparse.ArgumentParser:
     for stage in ("bm25", "smve", "muvera"):
         build.add_argument(f"--{stage}", action="store_true", help=f"also build the {stage} stage")
     build.add_argument("--pipeline", metavar="P", help=f"default pipeline: {PIPELINE_HELP}")
+
+    add = commands.add_parser("add", help="encode documents and add them (rewrites the index)")
+    add.set_defaults(run=_add)
+    add.add_argument("index", metavar="INDEX")
+    add.add_argument(
+        "--docs", metavar="FILE", required=True, help="JSONL rows: _id, text, optional title"
+    )
+
+    delete = commands.add_parser("delete", help="remove documents by id (rewrites the index)")
+    delete.set_defaults(run=_delete)
+    delete.add_argument("index", metavar="INDEX")
+    delete.add_argument("ids", metavar="ID", nargs="+", help='put "--" before an id starting "-"')
 
     search = commands.add_parser("search", help="search an index with one query")
     search.set_defaults(run=_search)

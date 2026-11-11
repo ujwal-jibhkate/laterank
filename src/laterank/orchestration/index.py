@@ -497,8 +497,9 @@ class Index:
 
         Rewrites the whole index: every stage is recomputed over old + new documents, so the
         result equals Index.build on (old docs in their order) + (new docs in the given order).
-        Measured on SciFact with BGE-M3 (5,183 docs, all stages): 354 s, of which SMVE is 318 s;
-        without SMVE about 10 s. Old documents are not re-encoded.
+        Measured on SciFact with BGE-M3 (5,183 docs, all stages): 354 s, of which SMVE is 318 s
+        and MUVERA 26 s; about 36 s without SMVE, and about 10 s without SMVE and MUVERA. Old
+        documents are not re-encoded.
 
         This object reads the new index at once. Any other open Index on this folder (in this
         or another process) must be reopened: the old segment's files are deleted.

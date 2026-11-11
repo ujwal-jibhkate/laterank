@@ -485,16 +485,90 @@ def test_a_bug_keeps_its_traceback(tmp_path, docs, monkeypatch):
         main(["build", str(tmp_path / "idx"), "--docs", str(docs), "--encoder", "bge-m3"])
 
 
-# AT8
+# AT8 (M5-3 AT4: six commands)
 
 
-def test_help_lists_the_four_commands(capsys):
+def test_help_lists_the_six_commands(capsys):
     with pytest.raises(SystemExit) as e:
         main(["--help"])
     assert e.value.code == 0
-    out = capsys.readouterr().out
-    assert all(c in out for c in ("build", "search", "evaluate", "tune"))
+    words = capsys.readouterr().out.split()
+    assert all(c in words for c in ("build", "add", "delete", "search", "evaluate", "tune"))
 
 
 def test_the_console_script_loads_main():
     assert entry_points(group="console_scripts")["laterank"].load() is main
+
+
+# M5-3: add and delete
+
+
+def _jsonl(path, rows):
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    return path
+
+
+def _files(folder):
+    return {p.relative_to(folder): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+
+
+# M5-3 AT1
+
+
+def test_add_puts_the_new_documents_last(tmp_path, docs, encoder, capsys):
+    _build(tmp_path / "idx", docs)
+    new = _jsonl(
+        tmp_path / "new.jsonl",
+        [{"_id": "n0", "text": "blue berry"}, {"_id": "n1", "text": "black cherry"}],
+    )
+    capsys.readouterr()
+    assert main(["add", str(tmp_path / "idx"), "--docs", str(new)]) == 0
+    assert capsys.readouterr().out == f"added 2 documents to {tmp_path / 'idx'}: 14 in total\n"
+    assert Index.open(tmp_path / "idx")._docs.ids()[-2:] == ["n0", "n1"]
+    assert main(["search", str(tmp_path / "idx"), "blue berry", "-k", "1"]) == 0
+    assert capsys.readouterr().out.split()[2] == "n0"
+
+
+# M5-3 AT2
+
+
+def test_delete_removes_the_ids_without_the_model(tmp_path, docs, encoder, monkeypatch, capsys):
+    _build(tmp_path / "idx", docs)
+    monkeypatch.setitem(encoder_mod.ENCODERS, "fake", lambda info: pytest.fail("loaded"))
+    capsys.readouterr()
+    assert main(["delete", str(tmp_path / "idx"), "d3", "d5", "d5"]) == 0  # a repeat counts once
+    assert capsys.readouterr().out == f"deleted 2 documents from {tmp_path / 'idx'}: 10 in total\n"
+    ids = Index.open(tmp_path / "idx")._docs.ids()
+    assert len(ids) == 10 and not {"d3", "d5"} & set(ids)
+
+
+# M5-3 AT3
+
+
+@pytest.mark.parametrize(
+    ("args", "message", "loads"),
+    [
+        (["add", "{idx}", "--docs", "{clash}"], "already in the index", True),
+        (["add", "{idx}", "--docs", "{missing}"], "no.jsonl", False),
+        (["delete", "{idx}", "d0", "nope"], "not in the index", False),
+        (["delete", "{idx}", *[f"d{i}" for i in range(12)]], "every document", False),
+    ],
+    ids=["add-clash", "add-missing-file", "delete-unknown", "delete-all"],
+)
+def test_a_refusal_is_one_line_and_leaves_the_index_alone(
+    tmp_path, docs, encoder, monkeypatch, capsys, args, message, loads
+):
+    _build(tmp_path / "idx", docs)
+    before = _files(tmp_path / "idx")
+    if not loads:
+        monkeypatch.setitem(encoder_mod.ENCODERS, "fake", lambda info: pytest.fail("loaded"))
+    names = {
+        "idx": tmp_path / "idx",
+        "clash": _jsonl(tmp_path / "clash.jsonl", [CORPUS[0]]),
+        "missing": tmp_path / "no.jsonl",
+    }
+    capsys.readouterr()
+    assert main([a.format(**names) for a in args]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("laterank: error: ") and message in err and err.count("\n") == 1
+    assert _files(tmp_path / "idx") == before

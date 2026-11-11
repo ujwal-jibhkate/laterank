@@ -5,10 +5,10 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 done (`Index.add` + `Index.delete`, `96992dc`, CI green on all 10 jobs). No spec approved; next is M5-3 (CLI `add`/`delete`, README, `0.2.0`).
+- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 done (`Index.add` + `Index.delete`, `96992dc`, CI green on all 10 jobs). M5-3 approved and built, not committed (CLI `add`/`delete`, README, `0.2.0`).
 - Works: `pip install "laterank[colbert]"` from PyPI; `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`. In `main` only: `index.add(docs, encoder)`, `index.delete(ids)` (whole-index rewrite, equals a fresh build).
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
-- Nothing is known broken. 490 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
+- Nothing is known broken. 496 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
 - Dependency floors `numpy>=2.2`, `scipy>=1.16` are tested in CI (`test-floor` job, 3 OS).
 - Chunking is cut from 0.1 (owner, 2026-11-08): the README tells users to split long documents before `build`.
 
@@ -76,6 +76,17 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-10 (M5-3: CLI add/delete, README, 0.2.0) - in progress
+- **Done so far**: drafted and approved M5-3 (`docs/specs/M5-3-cli-add-delete.md`; owner chose
+  `0.2.0`). Built `laterank add INDEX --docs FILE` and `laterank delete INDEX ID...`
+  (`api/cli.py`), 6 new tests in `tests/api/test_cli.py` (help test renamed), README section "Adding and deleting
+  documents", banner "Beta ... before 1.0", `Index.add` docstring timing fixed. Reviewer round 1:
+  "fix first", 8 findings, all fixed or recorded as Skipped (spec Changes).
+- **AT5 measured** (SciFact, mxbai at `bb13a29e`, `bm25 > maxsim@100`, this Mac): build 64 s;
+  evaluate nDCG@10 0.7459, R@100 0.9249; `add` of 2 docs 4.5 s (model load included); search ranks
+  the new doc #1; `delete` of both 0.9 s (no model load); segment files byte-identical to the first
+  build; evaluate again 0.7459 / 0.9249.
 
 ### 2026-11-10 (M5-2: Index.add + Index.delete)
 - **Done**: measured a full SciFact BGE-M3 rewrite from stored arrays: 354 s (SMVE 318, MUVERA 26,

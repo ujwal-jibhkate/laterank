@@ -1,6 +1,6 @@
 # laterank
 
-> **Pre-release.** It works end to end, but the API and on-disk format may change before 0.1.0.
+> **Beta.** It works end to end, but the API and on-disk format may still change before 1.0.
 
 `laterank` is a small Python library for searching your own documents locally with
 late-interaction models (BGE-M3 or ColBERT-style). It encodes your documents once into a plain
@@ -79,6 +79,23 @@ relevant documents": it can't pick a pipeline that beats MaxSim, and it can miss
 which sometimes does (SciFact: 0.7086 vs 0.6991 for exact search). Up to 0.052 nDCG@10 was lost
 in our tests (at sub-millisecond budgets; 0.042 above 1 ms); see [docs/dev/tune_validation.md](https://github.com/ujwal-jibhkate/laterank/blob/main/docs/dev/tune_validation.md).
 
+## Adding and deleting documents
+
+```python
+index.add([{"id": "d", "text": "Green tea contains caffeine."}], encoder)
+index.delete(["b"])
+```
+
+`add` needs the model the index was built with: the quick start's `encoder`, or
+`load_encoder(index.manifest.encoder)` in a later session. Any other model is refused.
+
+**Each call rewrites the whole index**, so the result is exactly what a fresh build of the new
+document list gives. Old documents aren't encoded again, but every first stage is recomputed. On
+SciFact (5,183 documents, BGE-M3, every stage) one rewrite took 354 s, 318 s of it SMVE and 26 s
+MUVERA; without those two, about 10 s. So put all additions in one `add` and all removals in one
+`delete`; changing a document is a `delete`, then an `add`. Any other open `Index` on the folder,
+in this program or another, must be opened again.
+
 ## Command line
 
 ```bash
@@ -87,6 +104,8 @@ laterank build ./idx --dataset scifact --encoder colbert \
 laterank search ./idx "statin side effects" -k 5
 laterank evaluate ./idx --dataset scifact --pipeline "bm25 > maxsim@100" --pipeline exhaustive
 laterank tune ./idx --budget-ms 20 --dataset scifact --apply
+laterank add ./idx --docs new.jsonl
+laterank delete ./idx d1 d2
 ```
 
 **Quote your pipelines.** Without quotes, the shell reads `>` as "write the output to a file".
@@ -96,7 +115,8 @@ time. To index your own documents, use `--docs FILE` instead: a JSONL file with 
 an optional `title` on each line. `--encoder` is required, and `search`, `evaluate` and `tune` read
 the model from the index. Every `search` loads the model again (about 7 s with mxbai on a Mac), so
 for many queries use the Python API. Without `--dataset`, `tune` measures agreement with MaxSim
-(see above).
+(see above). `add` reads a `--docs` file like `build`'s and uses the model the index records;
+`delete` takes document ids. Both rewrite the whole index, as described above.
 
 ## Contributing
 
