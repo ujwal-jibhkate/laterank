@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 import shutil
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -29,6 +29,7 @@ from laterank.components.maxsim import TOKENS, MaxSimReranker
 from laterank.components.muvera import MUVERA_DEFAULT, MuveraStage
 from laterank.components.smve import SMVE_BALANCED, SMVEStage
 from laterank.errors import IndexExistsError, IndexFormatError
+from laterank.kernels.maxsim import subset_ragged
 from laterank.orchestration.evaluate import Evaluation, evaluate
 from laterank.orchestration.pipeline import Pipeline, parse_pipeline
 from laterank.orchestration.tune import (
@@ -41,6 +42,7 @@ from laterank.orchestration.tune import (
     tune,
     tune_with_labels,
 )
+from laterank.storage.docs import _line, _record
 from laterank.storage.manifest import EncoderInfo, Manifest, write_manifest
 from laterank.storage.segment import Segment, open_index, write_segment
 
@@ -89,6 +91,89 @@ def _encoder_text(doc: Mapping) -> str:
         raise ValueError(f"document {doc.get('id')!r}: title and text must be strings")
     title, text = title.strip(), text.strip()
     return f"{title}. {text}" if title else text
+
+
+def _stage_arrays(
+    docs: list,
+    flat: np.ndarray,
+    offsets: np.ndarray,
+    encoder: EncoderInfo,
+    dense: np.ndarray | None,
+    lexical: sp.spmatrix | sp.sparray | None,
+    *,
+    bm25: bool,
+    smve: bool,
+    muvera: bool,
+) -> tuple[dict[str, np.ndarray], dict[str, dict]]:
+    """Check the inputs and compute every array the segment stores, plus the manifest stages.
+
+    Shared by `Index.create` and the add/delete rewrite. Raises ValueError as `create` documents.
+    """
+    flat, offsets = np.asarray(flat), np.asarray(offsets)
+    if flat.ndim != 2 or flat.shape[1] != encoder.dim:
+        raise ValueError(f"token vectors must be (T, {encoder.dim}), got {flat.shape}")
+    if not np.issubdtype(flat.dtype, np.floating) or not np.issubdtype(offsets.dtype, np.integer):
+        raise ValueError(
+            f"tokens need float vectors and int offsets, got {flat.dtype}, {offsets.dtype}"
+        )
+    MaxSimReranker(flat, offsets)  # checks the ragged layout
+    n = len(offsets) - 1
+    if len(docs) != n:
+        raise ValueError(f"got {len(docs)} documents but token offsets for {n}")
+    arrays = {f"{TOKENS}/flat.npy": flat, f"{TOKENS}/offsets.npy": offsets.astype(np.int64)}
+    stages: dict[str, dict] = {}
+    if dense is not None:
+        dense = np.asarray(dense)
+        if dense.ndim != 2 or len(dense) != n:
+            raise ValueError(f"dense must hold {n} rows (one per document), got {dense.shape}")
+        arrays |= DenseStage.arrays(dense)
+        if not np.isfinite(arrays[VECTORS]).all():
+            raise ValueError("dense vectors must be finite (no NaN or inf)")
+        stages["dense"] = {"type": "dense", "dim": int(dense.shape[1])}
+    if lexical is not None:
+        if not sp.issparse(lexical) or lexical.ndim != 2 or lexical.shape[0] != n:
+            raise ValueError(
+                f"lexical must be an ({n}, vocab) scipy sparse matrix (one row per "
+                f"document), got {type(lexical).__name__} {getattr(lexical, 'shape', '')}"
+            )
+        if lexical.dtype.kind not in "iuf":  # before the float32 cast drops complex parts
+            raise ValueError(f"lexical weights must be real numbers, got {lexical.dtype}")
+        arrays |= LexicalStage.arrays(lexical)  # any scipy format, incl. lil and dok
+        if not np.isfinite(arrays[WEIGHTS]).all():
+            raise ValueError("lexical weights must be finite (no NaN or inf)")
+        stages["lexical"] = {"type": "lexical", "vocab": int(lexical.shape[1])}
+    if dense is not None and lexical is not None:
+        stages["hybrid"] = {"type": "hybrid", "alpha": HYBRID_ALPHA}
+    if bm25:
+        if not all(isinstance(d, Mapping) for d in docs):
+            raise ValueError("every document must be a mapping like {'id': ..., 'text': ...}")
+        texts = [f"{d.get('title') or ''}\n{d.get('text') or ''}" for d in docs]
+        counts = BM25Stage.arrays(texts)
+        if len(counts[TF]) == 0:
+            raise ValueError("bm25: no document has a word to index (all empty or stop words)")
+        arrays |= counts
+        vocab = len(counts[INDPTR]) - 1
+        stages["bm25"] = {
+            "type": "bm25",
+            "tokenizer": TOKENIZER,
+            "k1": K1,
+            "b": B,
+            "vocab": vocab,
+        }
+    if smve or muvera:
+        # min/max carry NaN and show +-inf without a (T, d) temporary; checked before an
+        # encode that can take minutes
+        if not (np.isfinite(flat.min()) and np.isfinite(flat.max())):
+            who = " and ".join(n for n, on in (("smve", smve), ("muvera", muvera)) if on)
+            raise ValueError(f"{who}: token vectors must be finite (no NaN or inf)")
+    if smve:
+        smve_arrays, sha = SMVEStage.arrays(flat, offsets, SMVE_BALANCED)
+        arrays |= smve_arrays
+        stages["smve"] = {"type": "smve", **SMVE_BALANCED, "anchor_sha256": sha}
+    if muvera:
+        arrays |= MuveraStage.arrays(flat, offsets, MUVERA_DEFAULT)
+        stages["muvera"] = {"type": "muvera", **MUVERA_DEFAULT}
+    return arrays, stages
 
 
 class Index:
@@ -168,73 +253,10 @@ class Index:
         """
         path = Path(path)
         _check_free(path)
-        flat, offsets = np.asarray(tokens[0]), np.asarray(tokens[1])
-        if flat.ndim != 2 or flat.shape[1] != encoder.dim:
-            raise ValueError(f"token vectors must be (T, {encoder.dim}), got {flat.shape}")
-        if not np.issubdtype(flat.dtype, np.floating) or not np.issubdtype(
-            offsets.dtype, np.integer
-        ):
-            raise ValueError(
-                f"tokens need float vectors and int offsets, got {flat.dtype}, {offsets.dtype}"
-            )
-        MaxSimReranker(flat, offsets)  # checks the ragged layout
-        n = len(offsets) - 1
         docs = list(docs)
-        if len(docs) != n:
-            raise ValueError(f"got {len(docs)} documents but token offsets for {n}")
-        arrays = {f"{TOKENS}/flat.npy": flat, f"{TOKENS}/offsets.npy": offsets.astype(np.int64)}
-        stages: dict[str, dict] = {}
-        if dense is not None:
-            dense = np.asarray(dense)
-            if dense.ndim != 2 or len(dense) != n:
-                raise ValueError(f"dense must hold {n} rows (one per document), got {dense.shape}")
-            arrays |= DenseStage.arrays(dense)
-            if not np.isfinite(arrays[VECTORS]).all():
-                raise ValueError("dense vectors must be finite (no NaN or inf)")
-            stages["dense"] = {"type": "dense", "dim": int(dense.shape[1])}
-        if lexical is not None:
-            if not sp.issparse(lexical) or lexical.ndim != 2 or lexical.shape[0] != n:
-                raise ValueError(
-                    f"lexical must be an ({n}, vocab) scipy sparse matrix (one row per "
-                    f"document), got {type(lexical).__name__} {getattr(lexical, 'shape', '')}"
-                )
-            if lexical.dtype.kind not in "iuf":  # before the float32 cast drops complex parts
-                raise ValueError(f"lexical weights must be real numbers, got {lexical.dtype}")
-            arrays |= LexicalStage.arrays(lexical)  # any scipy format, incl. lil and dok
-            if not np.isfinite(arrays[WEIGHTS]).all():
-                raise ValueError("lexical weights must be finite (no NaN or inf)")
-            stages["lexical"] = {"type": "lexical", "vocab": int(lexical.shape[1])}
-        if dense is not None and lexical is not None:
-            stages["hybrid"] = {"type": "hybrid", "alpha": HYBRID_ALPHA}
-        if bm25:
-            if not all(isinstance(d, Mapping) for d in docs):
-                raise ValueError("every document must be a mapping like {'id': ..., 'text': ...}")
-            texts = [f"{d.get('title') or ''}\n{d.get('text') or ''}" for d in docs]
-            counts = BM25Stage.arrays(texts)
-            if len(counts[TF]) == 0:
-                raise ValueError("bm25: no document has a word to index (all empty or stop words)")
-            arrays |= counts
-            vocab = len(counts[INDPTR]) - 1
-            stages["bm25"] = {
-                "type": "bm25",
-                "tokenizer": TOKENIZER,
-                "k1": K1,
-                "b": B,
-                "vocab": vocab,
-            }
-        if smve or muvera:
-            # min/max carry NaN and show +-inf without a (T, d) temporary; checked before an
-            # encode that can take minutes
-            if not (np.isfinite(flat.min()) and np.isfinite(flat.max())):
-                who = " and ".join(n for n, on in (("smve", smve), ("muvera", muvera)) if on)
-                raise ValueError(f"{who}: token vectors must be finite (no NaN or inf)")
-        if smve:
-            smve_arrays, sha = SMVEStage.arrays(flat, offsets, SMVE_BALANCED)
-            arrays |= smve_arrays
-            stages["smve"] = {"type": "smve", **SMVE_BALANCED, "anchor_sha256": sha}
-        if muvera:
-            arrays |= MuveraStage.arrays(flat, offsets, MUVERA_DEFAULT)
-            stages["muvera"] = {"type": "muvera", **MUVERA_DEFAULT}
+        arrays, stages = _stage_arrays(
+            docs, tokens[0], tokens[1], encoder, dense, lexical, bm25=bm25, smve=smve, muvera=muvera
+        )
         p = parse_pipeline(pipeline)
         _check_pipeline(p, stages)
         existed = path.exists()
@@ -301,7 +323,8 @@ class Index:
         """
         path = Path(path)
         manifest, segments = open_index(path)
-        # ponytail: one segment only; map global rows across segments when add() lands (0.2)
+        # ponytail: one segment only (add/delete rewrite into one, M5-2); map global rows across
+        # segments if appended segments (research option B) ever land
         if len(segments) != 1:
             raise IndexFormatError(
                 f"{path} has {len(segments)} segments, but this laterank reads single-segment "
@@ -468,6 +491,128 @@ class Index:
         manifest = replace(self.manifest, default_pipeline=str(p))
         write_manifest(self.path, manifest)
         self.manifest, self._default = manifest, p
+
+    def add(self, docs: Sequence[Mapping], encoder: Encoder) -> None:
+        """Encode `docs` with `encoder` and add them after the existing documents.
+
+        Rewrites the whole index: every stage is recomputed over old + new documents, so the
+        result equals Index.build on (old docs in their order) + (new docs in the given order).
+        Measured on SciFact with BGE-M3 (5,183 docs, all stages): 354 s, of which SMVE is 318 s;
+        without SMVE about 10 s. Old documents are not re-encoded.
+
+        This object reads the new index at once. Any other open Index on this folder (in this
+        or another process) must be reopened: the old segment's files are deleted.
+
+        Raises (all before encoding; the index is unchanged):
+            ValueError: `docs` is empty or not all mappings; an id is already in the index or
+                repeats within `docs`; `encoder.info != self.manifest.encoder` (another model,
+                revision or settings would put the new vectors in a different space).
+            ValueError: as in `create`, e.g. bm25 finds no word (raised before anything is written).
+            ValueError (after encoding): the encoder's dense/lexical heads differ from the index's
+                stages.
+        """
+        docs = list(docs)
+        if not docs or not all(isinstance(d, Mapping) for d in docs):
+            raise ValueError("add needs one or more documents like {'id': ..., 'text': ...}")
+        for d in docs:  # storage's own checks (keys, id, metadata), before the long rewrite
+            _line(_record(d))
+        ids = [d["id"] for d in docs]
+        clash = sorted(set(ids) & set(self._docs.ids()))
+        if clash:
+            raise ValueError(f"ids already in the index: {clash[:5]}; delete them first")
+        if len(set(ids)) != len(ids):
+            raise ValueError("document ids repeat within the documents to add")
+        if encoder.info != self.manifest.encoder:
+            raise ValueError(
+                f"the encoder ({encoder.info}) isn't the one this index was built with "
+                f"({self.manifest.encoder}); use load_encoder(index.manifest.encoder)"
+            )
+        enc = encoder.encode_docs([_encoder_text(d) for d in docs])
+        tok = self._stages["maxsim"]
+        flat = np.concatenate([tok.flat, np.asarray(enc.tokens).astype(tok.flat.dtype)])
+        offsets = np.concatenate([tok.offsets, tok.offsets[-1] + np.asarray(enc.offsets)[1:]])
+        del tok  # no memmap of the old segment may stay open, or Windows can't delete it
+        dense, lexical = self._old_heads()
+        if (dense is None) != (enc.dense is None) or (lexical is None) != (enc.lexical is None):
+            raise ValueError("the encoder's heads (dense, lexical) differ from the index's stages")
+        if dense is not None:
+            dense = np.concatenate([dense, np.asarray(enc.dense)])
+        if lexical is not None:
+            lexical = sp.vstack([lexical, enc.lexical])
+        old = [self._docs[r] for r in range(len(self._docs))]
+        self._rewrite(old + docs, flat, offsets, dense, lexical)
+
+    def delete(self, ids: Iterable[str]) -> None:
+        """Remove the documents with these ids. The rest keep their order.
+
+        Rewrites the whole index, as `add` does; the result equals Index.build on the remaining
+        documents. As with `add`, any other open Index on this folder must be reopened.
+
+        Raises (the index is unchanged):
+            ValueError: `ids` is a bare str or bytes, is empty, names an id not in the index
+                (lists up to 5), or would remove every document.
+        """
+        if isinstance(ids, (str, bytes)):
+            raise ValueError(f"delete takes a list of ids, got the single value {ids!r}")
+        gone = set(ids)
+        if not gone:
+            raise ValueError("delete needs one or more ids")
+        old = self._docs.ids()
+        missing = sorted(gone - set(old), key=str)
+        if missing:
+            raise ValueError(f"ids not in the index: {missing[:5]}")
+        keep = [r for r, i in enumerate(old) if i not in gone]
+        if not keep:
+            raise ValueError("delete would remove every document; build a new index instead")
+        tok = self._stages["maxsim"]
+        flat, offsets = subset_ragged(tok.flat, tok.offsets, keep)
+        del tok  # no memmap of the old segment may stay open, or Windows can't delete it
+        dense, lexical = self._old_heads()
+        dense = None if dense is None else dense[keep]  # copies; drops the memmap
+        lexical = None if lexical is None else lexical[keep]
+        self._rewrite([self._docs[r] for r in keep], flat, offsets, dense, lexical)
+
+    def _old_heads(self) -> tuple[np.ndarray | None, sp.csr_matrix | None]:
+        """The stored dense vectors and lexical weights (n_docs rows), or None without the stage."""
+        dense = self._first.get("dense")
+        lex = self._first.get("lexical")
+        lexical = None
+        if lex is not None:
+            shape = (lex.n_docs, lex.vocab)
+            lexical = sp.csc_matrix((lex.weights, lex.rows, lex.indptr), shape=shape).tocsr()
+        return (None if dense is None else dense.vectors), lexical
+
+    def _rewrite(self, docs, flat, offsets, dense, lexical) -> None:
+        """Write the index anew as one segment, swap the manifest, then drop the old segments."""
+        # ponytail: add/delete hand over the whole token matrix in RAM (3.6 GiB for SciFact);
+        # stream it into a .npy memmap when a corpus doesn't fit
+        types = {c["type"] for c in self.manifest.stages.values()}
+        arrays, stages = _stage_arrays(
+            docs,
+            flat,
+            offsets,
+            self.manifest.encoder,
+            dense,
+            lexical,
+            bm25="bm25" in types,
+            smve="smve" in types,
+            muvera="muvera" in types,
+        )
+        # numbers of every seg-NNNNNN* entry, listed or left over from a crash
+        used = [int(p.name[4:10]) for p in self.path.glob("seg-*") if p.name[4:10].isdigit()]
+        info = write_segment(self.path, 1 + max(used, default=0), arrays, docs)
+        old = self.manifest
+        # created_with defaults to this laterank: it wrote every file now in the index
+        write_manifest(
+            self.path,
+            Manifest(old.encoder, stages, old.default_pipeline, (info,), created_at=old.created_at),
+        )
+        self.__dict__.update(Index.open(self.path).__dict__)  # drops our old memmaps
+        # another open Index on this folder can still hold memmaps, and on Windows that blocks
+        # the delete; ignore it, the next rewrite removes every unlisted segment
+        for p in self.path.glob("seg-*"):
+            if p.name != info.id:
+                shutil.rmtree(p, ignore_errors=True)
 
     def _pipeline(self, pipeline: str | Pipeline) -> Pipeline:
         p = pipeline if isinstance(pipeline, Pipeline) else parse_pipeline(pipeline)

@@ -5,10 +5,10 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M4 complete; M5-1 done: `laterank 0.1.0b2` is on PyPI (tag `v0.1.0b2` = `4587cdf`). No spec approved; next is M5-2 (0.2 add/delete design).
-- Works: `pip install "laterank[colbert]"` from PyPI (no `--pre`; quick-start checked in a new venv); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`.
+- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 (`Index.add` + `Index.delete`) approved and built, reviewer "merge"; waits for commit + CI (AT7), then `/spec M5-2 done`.
+- Works: `pip install "laterank[colbert]"` from PyPI; `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`. In `main` only: `index.add(docs, encoder)`, `index.delete(ids)` (whole-index rewrite, equals a fresh build).
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
-- Nothing is known broken. 484 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
+- Nothing is known broken. 490 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
 - Dependency floors `numpy>=2.2`, `scipy>=1.16` are tested in CI (`test-floor` job, 3 OS).
 - Chunking is cut from 0.1 (owner, 2026-11-08): the README tells users to split long documents before `build`.
 
@@ -54,10 +54,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## M5 checklist
 
 - [x] 1. `0.1.0b2` (`4587cdf`, CI green, on PyPI): test the `scipy` floor (raise it if 1.15 is broken), release so the PyPI page loses the dead `START_HERE.md` link (already fixed in the repo's README)
-- [ ] 2. 0.2 design: how `add` and `delete` change an index (segments, deletes, BM25 statistics, crash safety), from `docs/dev/add_delete_research.md`. Owner chose option A (rewrite into one new segment, 2026-11-10); measure a SciFact BGE-M3 rewrite first
-- [ ] 3. `Index.add` (new documents in a new segment)
-- [ ] 4. `Index.delete` (and how deleted documents leave search results)
-- [ ] 5. CLI `laterank add` / `laterank delete`, README, `0.2.0` release
+- [ ] 2. `Index.add` + `Index.delete` (option A: rewrite into one new segment; SciFact BGE-M3 rewrite measured at 354 s, SMVE 318 s; owner accepted the cost, 2026-11-10)
+- [ ] 3. CLI `laterank add` / `laterank delete`, README, `0.2.0` release
 
 ## Ported from smve-lab
 
@@ -78,6 +76,32 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-10 (M5-2: Index.add + Index.delete)
+- **Done**: measured a full SciFact BGE-M3 rewrite from stored arrays: 354 s (SMVE 318, MUVERA 26,
+  write 9, dense/lexical/bm25 < 0.5); disk 3,635 MiB tokens + 411 MUVERA + 89 SMVE. Drafted,
+  approved and built M5-2 (`docs/specs/M5-2-add-delete.md`): `orchestration/index.py` gains
+  module-level `_stage_arrays` (moved out of `create`), `Index.add`, `Index.delete`, `_old_heads`,
+  `_rewrite`; new `tests/orchestration/test_add_delete.py` (6 tests). M5 checklist renumbered.
+  Reviewer: round 1 "fix first" (7 findings, all fixed), round 2 "merge" (1 nit, fixed).
+- **Decisions**: accept the rewrite cost (owner: SMVE's corpus-wide center makes partial updates
+  inexact). Add + delete in one spec; M5-3 = CLI, README, `0.2.0` (owner OK at approval). New docs
+  go last, delete keeps order (ties go to the lower row). Other open `Index` objects must reopen
+  after add/delete (owner 1a: `DocStore` reopens the deleted `docs.jsonl`). `created_with` = the
+  rewriting version, `created_at` kept (owner 2a). `add` runs storage's doc checks before encoding.
+- **Shortcuts with a ceiling**: `_rewrite` takes the whole token matrix in RAM (3.6 GiB SciFact,
+  ~70 GiB at 100k docs); upgrade: stream into a `.npy` memmap when a corpus doesn't fit
+  (`grep ponytail:` now 10).
+- **Surprises**: `FakeEncoder(dense=False)` has the same `EncoderInfo` as the default, so the model
+  check alone can't catch a missing head (added a heads check after encoding). Local `tok`
+  references kept the old segment's memmaps open, so on Windows the old folder would never have
+  been deleted (reviewer; fixed with `del tok`, measured 0 of 13 memmaps alive, Windows not run).
+  My first refactor edit left a duplicate block in `index.py`; fixed before any test ran.
+- **Next**: owner commits (`Spec: M5-2`) and pushes; when CI is green on all jobs (Windows checks
+  the old-folder delete for real), tick AT7 and run `/spec M5-2 done`. Then `/spec M5-3`: start by
+  reading `src/laterank/api/cli.py` (`build`'s arguments) and decide with the owner how
+  `laterank add` takes documents (`--docs` JSONL like `build`?) and gets the encoder
+  (`load_encoder(index.manifest.encoder)`).
 
 ### 2026-11-10 (M5-1: 0.1.0b2 on PyPI)
 - **Done**: M5 checklist written. Researcher report on add/delete saved as
