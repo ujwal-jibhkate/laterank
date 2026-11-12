@@ -10,7 +10,7 @@ disable-model-invocation: true
 A new session remembers nothing about earlier sessions. `docs/dev/progress.md` is the project's
 memory, so read it before anything else.
 
-1. Read `CLAUDE.md` and `docs/dev/progress.md`. Run `python3 scripts/specs.py active` and read
+1. Read `docs/dev/progress.md`. Run `python3 scripts/specs.py active` and read
    that spec in full: its unticked acceptance tests and its **Tasks** table are today's work. If
    no spec is approved, today's first task is drafting the next one with `/spec <id>`, because
    no code can change until it's approved.

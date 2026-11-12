@@ -63,8 +63,7 @@ laterank SMVE `balanced` on SciFact, measured 2026-10-12 (M1-4), BGE-M3 embeddin
 
 The rerank spread across seeds (0.0096) is about the ±0.01 tolerance, so don't tighten it.
 laterank's Recall@100 runs ~0.01 below smve-lab's (0.857–0.862). Building the doc vectors takes
-~5.2 min on the owner's Mac (10 cores; 8.3 min before the review fixed the slice size);
-smve-lab's torch took ~3.3 min. Slicing doesn't change results, so the table above stands.
+~5.2 min on the owner's Mac (10 cores); smve-lab's torch took ~3.3 min.
 
 MUVERA `r40_k4_p32` (R=40, k_sim=4, d_proj=32, uncentered), SciFact. smve-lab, seed 0
 (`results/scifact_bgem3/muvera/runs.csv`): nDCG@10 0.5530, Recall@100 0.858, `> maxsim@100` 0.6888
@@ -77,8 +76,8 @@ MUVERA `r40_k4_p32` (R=40, k_sim=4, d_proj=32, uncentered), SciFact. smve-lab, s
 | 1 | 0.5378 | 0.8560 | 0.6870 | 24.5 s |
 | 2 | 0.5118 | 0.8540 | 0.6904 | 25.0 s |
 
-Alone, seeds spread 0.026 (wider than SMVE's 0.010), so the first guess [0.533, 0.573] missed seed 2
-and the owner widened it. Reranked, the spread is only 0.003. The golden test runs all three seeds
+Alone, seeds spread 0.026 (wider than SMVE's 0.010), so the band is wide on purpose; don't narrow
+it. Reranked, the spread is only 0.003. The golden test runs all three seeds
 (~2 min). Build takes ~22-25 s on the owner's Mac against torch's 13.7 s.
 
 ## ColBERT models: laterank's own measurement, no smve-lab reference
