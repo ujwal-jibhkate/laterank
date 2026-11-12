@@ -492,8 +492,11 @@ class Index:
         write_manifest(self.path, manifest)
         self.manifest, self._default = manifest, p
 
-    def add(self, docs: Sequence[Mapping], encoder: Encoder) -> None:
+    def add(self, docs: Sequence[Mapping], encoder: Encoder | None = None) -> None:
         """Encode `docs` with `encoder` and add them after the existing documents.
+
+        `encoder=None` loads the index's own model, load_encoder(self.manifest.encoder), only
+        after the document checks below have passed, so a bad document fails without the wait.
 
         Rewrites the whole index: every stage is recomputed over old + new documents, so the
         result equals Index.build on (old docs in their order) + (new docs in the given order).
@@ -508,6 +511,9 @@ class Index:
             ValueError: `docs` is empty or not all mappings; an id is already in the index or
                 repeats within `docs`; `encoder.info != self.manifest.encoder` (another model,
                 revision or settings would put the new vectors in a different space).
+            ValueError, ImportError, OSError: `encoder` is None and load_encoder fails (no such
+                encoder, the loaded model differs from the recorded one, or the model library or
+                download is missing).
             ValueError: as in `create`, e.g. bm25 finds no word (raised before anything is written).
             ValueError (after encoding): the encoder's dense/lexical heads differ from the index's
                 stages.
@@ -523,6 +529,8 @@ class Index:
             raise ValueError(f"ids already in the index: {clash[:5]}; delete them first")
         if len(set(ids)) != len(ids):
             raise ValueError("document ids repeat within the documents to add")
+        if encoder is None:
+            encoder = load_encoder(self.manifest.encoder)
         if encoder.info != self.manifest.encoder:
             raise ValueError(
                 f"the encoder ({encoder.info}) isn't the one this index was built with "

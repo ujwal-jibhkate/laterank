@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+import laterank.components.encoder as encoder_mod
 import laterank.orchestration.index as index_module
 from laterank.orchestration.index import Index
 
@@ -37,6 +38,21 @@ def test_add_equals_a_fresh_build(tmp_path, fake_encoder_cls):  # AT1, AT3
     assert index.search(query, k=1)[0].id == "d7"
     assert Index.open(tmp_path / "ix").search(query, k=1)[0].id == "d7"
     assert [p.name for p in (tmp_path / "ix").iterdir() if p.is_dir()] == ["seg-000002"]
+
+
+def test_add_without_an_encoder_checks_before_loading_the_model(
+    tmp_path, fake_encoder_cls, monkeypatch
+):  # M6-1 AT2
+    enc = fake_encoder_cls()
+    monkeypatch.setitem(encoder_mod.ENCODERS, "fake", lambda info: pytest.fail("loaded"))
+    index = build(tmp_path / "ix", DOCS[:6], enc)
+    with pytest.raises(ValueError, match="already in the index"):
+        index.add([{"id": "d0", "text": "x"}])
+    monkeypatch.setitem(encoder_mod.ENCODERS, "fake", lambda info: enc)
+    index.add(DOCS[6:])
+    with_enc = build(tmp_path / "ix2", DOCS[:6], enc)
+    with_enc.add(DOCS[6:], enc)
+    assert snapshot(tmp_path / "ix") == snapshot(tmp_path / "ix2")
 
 
 @pytest.mark.parametrize("gone", [["d6", "d7", "d8"], ["d1", "d4"]])  # end and middle

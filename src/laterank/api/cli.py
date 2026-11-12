@@ -91,7 +91,9 @@ def _build(args: argparse.Namespace) -> int:
 def _add(args: argparse.Namespace) -> int:
     index = Index.open(args.index)  # a bad folder fails first
     docs = load_corpus(args.docs)  # a missing file or bad JSON fails before the model loads
-    index.add(docs, load_encoder(index.manifest.encoder))
+    if not docs:
+        raise ValueError(f"{args.docs} has no documents")
+    index.add(docs)  # checks the documents first, then loads the index's model
     print(
         f"added {len(docs)} documents to {args.index}: "
         f"{index.manifest.segments[0].documents} in total"

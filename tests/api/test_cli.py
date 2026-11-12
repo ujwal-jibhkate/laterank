@@ -548,12 +548,23 @@ def test_delete_removes_the_ids_without_the_model(tmp_path, docs, encoder, monke
 @pytest.mark.parametrize(
     ("args", "message", "loads"),
     [
-        (["add", "{idx}", "--docs", "{clash}"], "already in the index", True),
+        (["add", "{idx}", "--docs", "{clash}"], "already in the index", False),  # M6-1 AT1
+        (["add", "{idx}", "--docs", "{empty}"], "empty.jsonl has no documents", False),
+        (["add", "{idx}", "--docs", "{repeat}"], "repeat", False),
+        (["add", "{idx}", "--docs", "{blank}"], "non-empty string 'id'", False),
         (["add", "{idx}", "--docs", "{missing}"], "no.jsonl", False),
         (["delete", "{idx}", "d0", "nope"], "not in the index", False),
         (["delete", "{idx}", *[f"d{i}" for i in range(12)]], "every document", False),
     ],
-    ids=["add-clash", "add-missing-file", "delete-unknown", "delete-all"],
+    ids=[
+        "add-clash",
+        "add-empty",
+        "add-repeat",
+        "add-blank-id",
+        "add-missing-file",
+        "delete-unknown",
+        "delete-all",
+    ],
 )
 def test_a_refusal_is_one_line_and_leaves_the_index_alone(
     tmp_path, docs, encoder, monkeypatch, capsys, args, message, loads
@@ -565,6 +576,9 @@ def test_a_refusal_is_one_line_and_leaves_the_index_alone(
     names = {
         "idx": tmp_path / "idx",
         "clash": _jsonl(tmp_path / "clash.jsonl", [CORPUS[0]]),
+        "empty": _jsonl(tmp_path / "empty.jsonl", []),
+        "repeat": _jsonl(tmp_path / "repeat.jsonl", [{"_id": "n", "text": "a"}] * 2),
+        "blank": _jsonl(tmp_path / "blank.jsonl", [{"_id": "", "text": "a"}]),
         "missing": tmp_path / "no.jsonl",
     }
     capsys.readouterr()

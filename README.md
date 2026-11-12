@@ -86,8 +86,9 @@ index.add([{"id": "d", "text": "Green tea contains caffeine."}], encoder)
 index.delete(["b"])
 ```
 
-`add` needs the model the index was built with: the quick start's `encoder`, or
-`load_encoder(index.manifest.encoder)` in a later session. Any other model is refused.
+`add` needs the model the index was built with: the quick start's `encoder`, or, in a later
+session, no encoder at all: `index.add(new_docs)` loads the index's own model once the documents
+pass their checks. Any other model is refused.
 
 **Each call rewrites the whole index**, so the result is exactly what a fresh build of the new
 document list gives. Old documents aren't encoded again, but every first stage is recomputed. On

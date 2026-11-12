@@ -57,6 +57,11 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 - [x] 2. `Index.add` + `Index.delete` (`96992dc`, CI green) (option A: rewrite into one new segment; SciFact BGE-M3 rewrite measured at 354 s, SMVE 318 s; owner accepted the cost, 2026-11-10)
 - [x] 3. CLI `laterank add` / `laterank delete`, README, `0.2.0` release (`89655c2`, CI green, tag `v0.2.0`, on PyPI)
 
+## M6 checklist
+
+- [ ] 1. `laterank add` checks its documents before the model loads (empty file, id already in the index, id repeated, empty `_id`)
+- [ ] 2. Beta testing: a "try it and report" note (issue template + README line), then outside users try it (design doc §11, Nov 16-27)
+
 ## Ported from smve-lab
 
 | smve-lab file | laterank file | what changed |
