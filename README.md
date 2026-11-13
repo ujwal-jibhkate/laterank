@@ -2,6 +2,8 @@
 
 > **Beta.** It works end to end, but the API and on-disk format may still change before 1.0.
 
+Trying it? Tell us what broke or confused you: [open a beta report](https://github.com/ujwal-jibhkate/laterank/issues/new?template=beta-report.md).
+
 `laterank` is a small Python library for searching your own documents locally with
 late-interaction models (BGE-M3 or ColBERT-style). It encodes your documents once into a plain
 folder of NumPy arrays and JSON, finds about a hundred promising candidates with a cheap first
