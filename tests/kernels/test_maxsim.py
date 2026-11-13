@@ -115,4 +115,5 @@ def test_doc_token_order_does_not_matter(q, d, data):
 @given(q=vectors, d=vectors, extra=arrays(np.float32, (1, DIM), elements=unit_floats))
 def test_adding_a_doc_token_never_lowers_the_score(q, d, extra):
     # Each query token's max can only stay or grow when the doc gains a token.
-    assert _score(q, np.vstack([d, extra])) >= _score(q, d) - 1e-5
+    base = _score(q, d)  # float32: adding a row can move the sum's last digits, so relative
+    assert _score(q, np.vstack([d, extra])) >= base - 1e-5 * max(1, abs(base))
