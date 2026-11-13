@@ -5,10 +5,10 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 done (`Index.add` + `Index.delete`, `96992dc`, CI green on all 10 jobs). M5-3 done (`laterank 0.2.0` on PyPI, tag `v0.2.0` on `89655c2`). M5 complete; no spec approved.
-- Works: `pip install "laterank[colbert]"` from PyPI (0.2.0); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `add`, `delete`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `index.add(docs, encoder)`, `index.delete(ids)` (whole-index rewrite, equals a fresh build).
+- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 done (`Index.add` + `Index.delete`, `96992dc`, CI green on all 10 jobs). M5-3 done (`laterank 0.2.0` on PyPI, tag `v0.2.0` on `89655c2`). M5 complete. M6 (2 items: faster `add` refusals, beta testing): M6-1 done (`d882be9`, CI green, not released); no spec approved.
+- Works: `pip install "laterank[colbert]"` from PyPI (0.2.0); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `add`, `delete`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `index.add(docs[, encoder])` (no encoder: the index's model loads after the doc checks; main only, not on PyPI yet), `index.delete(ids)` (whole-index rewrite, equals a fresh build).
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
-- Nothing is known broken. 496 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
+- Nothing is known broken. 500 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
 - Dependency floors `numpy>=2.2`, `scipy>=1.16` are tested in CI (`test-floor` job, 3 OS).
 - Chunking is cut from 0.1 (owner, 2026-11-08): the README tells users to split long documents before `build`.
 
@@ -59,7 +59,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## M6 checklist
 
-- [ ] 1. `laterank add` checks its documents before the model loads (empty file, id already in the index, id repeated, empty `_id`)
+- [x] 1. `laterank add` checks its documents before the model loads (empty file, id already in the index, id repeated, empty `_id`) (`d882be9`, CI green; `index.add(docs)` without an encoder loads the index's model after the checks)
 - [ ] 2. Beta testing: a "try it and report" note (issue template + README line), then outside users try it (design doc §11, Nov 16-27)
 
 ## Ported from smve-lab
@@ -81,6 +81,28 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-12 (M6 framed; M6-1: add checks before the model loads)
+- **Done**: framed M6 from the `ponytail:` markers, the M5 specs' Skipped lines and design doc
+  §11; M6 checklist written (owner took Claude's recommendation). Drafted, approved, built and
+  closed M6-1 (`docs/specs/M6-1-add-checks-first.md`): `Index.add(docs, encoder=None)` loads
+  `load_encoder(self.manifest.encoder)` after the doc checks (`orchestration/index.py`); `_add`
+  refuses an empty file by name and calls `index.add(docs)` (`api/cli.py`); new AT2 test in
+  `tests/orchestration/test_add_delete.py`; 3 new refusal cases + `add-clash` now asserts no model
+  load (`tests/api/test_cli.py`); one README sentence. Committed `d882be9`, CI green. Reviewer:
+  "merge" (1 low docstring finding, fixed). Owner's skill edits committed as `28966b4`.
+- **Decisions**: optional `encoder` instead of a public `check_docs` or a third private call from
+  `cli.py` (no new method, M3-2's rule, Python users get it too). `encoder` stays (0.2.0 callers).
+  Empty-file check lives in the CLI (the message names the file). Not released: waits for the
+  beta-testing release or a user who needs it.
+- **Shortcuts with a ceiling**: none added (`grep ponytail: src tests` still 10; the 11th is in
+  `scripts/specs.py`).
+- **Surprises**: `Index.add` already checked everything before encoding; only the CLI's
+  `load_encoder` call came first. The reviewer ran the new tests against the old source: 5 of 9
+  failed, as they should.
+- **Next**: `/spec M6-2` (beta testing). Decide with the owner: a GitHub issue template
+  (`.github/ISSUE_TEMPLATE/`) + a README "Try it and report" line; whether to release `0.2.1`
+  first so testers get M6-1; and who the outside testers are and how long (§11 says Nov 16-27).
 
 ### 2026-11-11 (M5-3: CLI add/delete, README, 0.2.0 on PyPI)
 - **Done**: drafted, approved, built and closed M5-3 (`docs/specs/M5-3-cli-add-delete.md`).

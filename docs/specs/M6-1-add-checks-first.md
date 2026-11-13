@@ -1,7 +1,7 @@
 ---
 id: M6-1
 title: add checks documents before the model loads
-status: approved
+status: done
 approved: 2026-11-12
 ---
 
@@ -70,17 +70,17 @@ loads the index's own model.
 Tests in `tests/api/test_cli.py` (fake encoder, model load replaced by `pytest.fail`) and
 `tests/orchestration/test_add_delete.py`.
 
-- [ ] AT1: `laterank add` refuses each of these with one stderr line, exit 1, the index folder
+- [x] AT1: `laterank add` refuses each of these with one stderr line, exit 1, the index folder
   byte-unchanged, and the model never loaded: an empty `--docs` file (message names the file); an
   id already in the index; an id repeated in the file; an empty `_id`. (The existing `add-clash`
   case flips from `loads=True` to `False`.)
-- [ ] AT2: `index.add(docs)` with no encoder adds the documents and equals `index.add(docs,
+- [x] AT2: `index.add(docs)` with no encoder adds the documents and equals `index.add(docs,
   encoder)` (same doc ids and same top hit for one query); `index.add(bad_docs)` raises
   `ValueError` without loading the model.
-- [ ] AT3: the existing M5-2/M5-3 tests pass unchanged (`laterank add` happy path still loads the
+- [x] AT3: the existing M5-2/M5-3 tests pass unchanged (`laterank add` happy path still loads the
   model once).
-- [ ] AT4: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass; CI green.
-- [ ] AT5: the `reviewer` agent returns `merge`.
+- [x] AT4: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass; CI green.
+- [x] AT5: the `reviewer` agent returns `merge`.
 
 ## Tasks
 
@@ -92,3 +92,6 @@ Tests in `tests/api/test_cli.py` (fake encoder, model load replaced by `pytest.f
 | 4 | reviewer (AT5), commit on the owner's OK; owner pushes, CI (AT4) | none | 1-3 | no |
 
 ## Changes
+
+- 2026-11-12 (reviewer, "merge"): `Index.add`'s Raises lists load_encoder's errors when
+  `encoder` is None - the docstring left them out. Built `d882be9`, CI green.
