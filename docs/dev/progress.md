@@ -5,8 +5,8 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 
 ## Current state
 
-- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 done (`Index.add` + `Index.delete`, `96992dc`, CI green on all 10 jobs). M5-3 done (`laterank 0.2.0` on PyPI, tag `v0.2.0` on `89655c2`). M5 complete. M6 (2 items: faster `add` refusals, beta testing): M6-1 done (`d882be9`, CI green, not released); no spec approved.
-- Works: `pip install "laterank[colbert]"` from PyPI (0.2.0); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `add`, `delete`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `index.add(docs[, encoder])` (no encoder: the index's model loads after the doc checks; main only, not on PyPI yet), `index.delete(ids)` (whole-index rewrite, equals a fresh build).
+- Milestones M0-M4 complete; M5-1 done (`laterank 0.1.0b2` on PyPI). M5-2 done (`Index.add` + `Index.delete`, `96992dc`, CI green on all 10 jobs). M5-3 done (`laterank 0.2.0` on PyPI, tag `v0.2.0` on `89655c2`). M5 complete. M6 complete: M6-1 (faster `add` refusals) and M6-2 (beta testing set up, `laterank 0.2.1` on PyPI, tag `v0.2.1`). Beta window Nov 16-27; no spec approved.
+- Works: `pip install "laterank[colbert]"` from PyPI (0.2.1); `from laterank import Index, Budget, ColBERTEncoder, BGEM3Encoder, load_encoder`; `laterank build`, `add`, `delete`, `search`, `evaluate`, `tune`; `load_beir`/`download_beir`; first stages `dense`, `lexical`, `hybrid`, `bm25`, `smve`, `muvera`, `exhaustive`, alone or `> maxsim@N`; `index.add(docs[, encoder])` (no encoder: the index's model loads after the doc checks), `index.delete(ids)` (whole-index rewrite, equals a fresh build).
 - Tune with labels is the recommended mode (label-free fails the 0.01 test on all 3 datasets). Recommended ColBERT model: **mxbai-edge-colbert-v0-32m** (not hard-coded: `--hf-id`).
 - Nothing is known broken. 500 passed, 31 golden skip without `LATERANK_GOLDEN_DIR` (some also need `uv sync --extra bge-m3 --extra colbert`). A plain `uv sync` removes those extras.
 - Dependency floors `numpy>=2.2`, `scipy>=1.16` are tested in CI (`test-floor` job, 3 OS).
@@ -60,7 +60,7 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 ## M6 checklist
 
 - [x] 1. `laterank add` checks its documents before the model loads (empty file, id already in the index, id repeated, empty `_id`) (`d882be9`, CI green; `index.add(docs)` without an encoder loads the index's model after the checks)
-- [ ] 2. Beta testing: a "try it and report" note (issue template + README line), then outside users try it (design doc §11, Nov 16-27)
+- [x] 2. Beta testing set up: "Beta report" issue template + `beta` label + README link (`71487d9`, CI green), `0.2.1` on PyPI (tag `v0.2.1`), posts published 2026-11-13: [LinkedIn](https://lnkd.in/p/gj4hCMw9), [X thread](https://x.com/ujwaljibhkate/status/2121301518670299169) (text in `docs/dev/beta_post.md`). Testing window Nov 16-27.
 
 ## Ported from smve-lab
 
@@ -81,6 +81,27 @@ This file is the project's memory between Claude Code sessions. `/start-session`
 | `bge_m3.py` (`load_model`, `encode_texts`) | `components/{encoder,bgem3}.py` | `BGEM3Encoder` (FlagEmbedding, lazy import) behind an `Encoder` Protocol; model pinned by `snapshot_download(revision=sha)` and the sha recorded; ragged outputs → `EncodedDocs` (float16 tokens, CSR lexical); queries via `encode_query`; vectors match smve-lab's (dense cosine ≥ 0.9999999 on 20 docs) |
 
 ## Log
+
+### 2026-11-13 (M6-2: beta testing set up, 0.2.1 on PyPI, posts out)
+- **Done**: drafted, approved, built and closed M6-2 (`docs/specs/M6-2-beta-testing.md`):
+  `.github/ISSUE_TEMPLATE/beta-report.md` (4 headings, label `beta`), `beta` label created, README
+  link under the banner (`71487d9`, CI green). Owner tagged `v0.2.1`, uploaded, pushed the tag;
+  verified from PyPI in a fresh venv: 0.2.1 installs, quick-start ranks `a` first (8.559),
+  `add --docs empty.jsonl` refuses in 0.32 s. `docs/dev/beta_post.md`: 5-post X thread + LinkedIn
+  post (what/why/how, CLI and Python), owner published both:
+  [LinkedIn](https://lnkd.in/p/gj4hCMw9), [X](https://x.com/ujwaljibhkate/status/2121301518670299169).
+  Reviewer: round 1 "fix first" (4 overclaims in the post), round 2 "merge".
+- **Decisions**: release 0.2.1 first so testers get M6-1 (owner). Public posts on X + LinkedIn,
+  Claude drafts, owner posts (owner). Markdown template, not an issue form (form when reports
+  miss version/OS). Posts claim only what was measured: model + commit `bb13a29e`, Apple-silicon
+  Mac, after downloads. One paragraph per line in `beta_post.md` so it pastes cleanly.
+- **Shortcuts with a ceiling**: none added (`grep ponytail: src tests` still 10).
+- **Surprises**: at `/spec M6-2 done`, Hypothesis found a float32 case in
+  `test_adding_a_doc_token_never_lowers_the_score` (59.760323 vs 59.76034, fixed 1e-5 bound) and
+  replayed it every run; bound made relative, `1073a1b` (`Spec: none`). CI never saw it (no saved
+  example there). Anonymous `issues/new?template=` returns 302 (login); checked via GraphQL instead.
+- **Next**: Nov 16-27, triage reports: `gh issue list --label beta`. For each one the owner picks,
+  `/spec M6-3` (or M7-1). Candidates waiting on a report: issue form, docs site, Show HN post.
 
 ### 2026-11-12 (M6 framed; M6-1: add checks before the model loads)
 - **Done**: framed M6 from the `ponytail:` markers, the M5 specs' Skipped lines and design doc

@@ -1,7 +1,7 @@
 ---
 id: M6-2
 title: Beta testing: report template, 0.2.1, public post
-status: approved
+status: done
 approved: 2026-11-13
 ---
 
@@ -70,19 +70,19 @@ tags, uploads with the project-scoped token, and pushes the tag after the upload
 
 ## Acceptance tests
 
-- [ ] AT1: after the push, `https://github.com/ujwal-jibhkate/laterank/issues/new/choose` lists
+- [x] AT1: after the push, `https://github.com/ujwal-jibhkate/laterank/issues/new/choose` lists
   "Beta report", and the README link opens the template with its four headings.
-- [ ] AT2: the `beta` label exists on the repo (`gh label list`), so new reports carry it.
-- [ ] AT3: both posts in `docs/dev/beta_post.md` have every item listed in Interfaces, each X post
+- [x] AT2: the `beta` label exists on the repo (`gh label list`), so new reports carry it.
+- [x] AT3: both posts in `docs/dev/beta_post.md` have every item listed in Interfaces, each X post
   is at most 280 characters as X counts them, and the nDCG matches the M5-3 log entry.
-- [ ] AT4: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass; CI is
+- [x] AT4: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` pass; CI is
   green on every job for the commit to be tagged.
-- [ ] AT5: from the tag, `dist/` holds exactly the `0.2.1` sdist and wheel and `twine check`
+- [x] AT5: from the tag, `dist/` holds exactly the `0.2.1` sdist and wheel and `twine check`
   passes. After the upload, in a new venv outside the repo, `pip install "laterank[colbert]"`
   installs `0.2.1`, the quick-start ranks doc `a` first, and `laterank add IDX --docs empty.jsonl`
   fails with "has no documents" in under 2 s.
-- [ ] AT6: the owner has published both posts (X, LinkedIn); their links are in the progress log.
-- [ ] AT7: the `reviewer` agent returns `merge` (before the tag).
+- [x] AT6: the owner has published both posts (X, LinkedIn); their links are in the progress log.
+- [x] AT7: the `reviewer` agent returns `merge` (before the tag).
 
 ## Tasks
 
